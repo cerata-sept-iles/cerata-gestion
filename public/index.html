@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cerata">
+<title>Cerata — Gestion Chantier</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { background: linear-gradient(135deg, #0F2540 0%, #1A3F6F 60%, #2563EB 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .login-card { background: white; border-radius: 24px; padding: 40px 36px; width: 100%; max-width: 400px; box-shadow: 0 24px 80px rgba(0,0,0,0.3); margin: 20px; }
+  .login-logo { text-align: center; margin-bottom: 32px; }
+  .login-logo h1 { font-size: 32px; font-weight: 900; color: #0F2540; letter-spacing: -1px; }
+  .login-logo h1 span { color: #F59E0B; }
+  .login-logo p { color: #6B7280; font-size: 14px; margin-top: 4px; }
+  .login-error { background: #FEE2E2; color: #991B1B; padding: 10px 14px; border-radius: 10px; font-size: 14px; margin-bottom: 16px; display: none; }
+  .login-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #1A3F6F, #2563EB); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 8px; }
+  .login-btn:hover { opacity: 0.9; }
+</style>
+</head>
+<body>
+<div class="login-card">
+  <div class="login-logo">
+    <h1>Cerata <span>•</span></h1>
+    <p>Système de gestion de chantier</p>
+  </div>
+  <div class="login-error" id="loginErr"></div>
+  <div class="fg">
+    <label class="flabel">Courriel</label>
+    <input class="finput" type="email" id="loginEmail" placeholder="votre@email.com" autocomplete="email">
+  </div>
+  <div class="fg">
+    <label class="flabel">Mot de passe</label>
+    <input class="finput" type="password" id="loginPwd" placeholder="••••••••" autocomplete="current-password">
+  </div>
+  <button class="login-btn" onclick="login()">Se connecter</button>
+</div>
+<script>
+  // If already logged in, redirect
+  fetch('/api/auth/me').then(r => { if(r.ok) window.location = '/app.html'; });
+
+  document.getElementById('loginPwd').addEventListener('keydown', e => { if(e.key==='Enter') login(); });
+
+  async function login() {
+    const email = document.getElementById('loginEmail').value;
+    const pwd = document.getElementById('loginPwd').value;
+    const err = document.getElementById('loginErr');
+    err.style.display = 'none';
+    const r = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, password: pwd}) });
+    if (r.ok) { window.location = '/app.html'; }
+    else { const d = await r.json(); err.textContent = d.error || 'Erreur de connexion'; err.style.display = 'block'; }
+  }
+</script>
+</body>
+</html>
