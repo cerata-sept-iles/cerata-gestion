@@ -466,7 +466,7 @@ async function renderSoumissions() {
   content.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
       ${cols.map(col => { const s=statMap[col.val]||{count:0,total:0}; return `
-        <div class="stat-card" style="border-top:3px solid ${{kc-att:'var(--orange)',kc-acc:'var(--green)',kc-ref:'var(--red)',kc-rev:'var(--purple)'}[col.cls]};cursor:pointer" onclick="soumFilt='${col.val}';setSoumView('list')">
+        <div class="stat-card" style="border-top:3px solid ${{'kc-att':'var(--orange)','kc-acc':'var(--green)','kc-ref':'var(--red)','kc-rev':'var(--purple)'}[col.cls]};cursor:pointer" onclick="soumFilt='${col.val}';setSoumView('list')">
           <div class="stat-val">${s.count||0}</div>
           <div class="stat-label">${col.val}</div>
           ${s.total?`<div class="stat-sub">${fmt(s.total)}</div>`:''}
