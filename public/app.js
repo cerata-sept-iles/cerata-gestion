@@ -134,6 +134,14 @@ async function api(path, opts={}) {
   return r.json();
 }
 
+// ===== AUTO-FILL CLIENT FROM DOSSIER =====
+let _formDoss = [];
+function fillClientFromDoss(dossId, fieldId) {
+  if (!dossId) return;
+  const d = _formDoss.find(x => String(x.id) === String(dossId));
+  if (d && d.client) { const el = document.getElementById(fieldId); if (el) el.value = d.client; }
+}
+
 // ===== DRAWER =====
 function openDrawer(title, bodyHTML, footerHTML) {
   document.getElementById('drawerTitle').textContent = title;
@@ -540,10 +548,11 @@ async function quickStatut(id, statut) { await api('/soumissions/'+id+'/statut',
 
 function openSoumForm(dossId=null, existing={}) {
   api('/dossiers?company_id='+currentCo).then(doss => {
+    _formDoss = doss;
     const html = `
       <div class="fg"><label class="flabel">Titre *</label><input class="finput" id="sTitre" value="${existing.titre||''}" placeholder="Ex: Pompage béton fondation - 45m³"></div>
       <div class="fg"><label class="flabel">Client *</label><input class="finput" id="sClient" value="${existing.client||''}"></div>
-      <div class="fg"><label class="flabel">Dossier lié</label><select class="fselect" id="sDoss"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(existing.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
+      <div class="fg"><label class="flabel">Dossier lié</label><select class="fselect" id="sDoss" onchange="fillClientFromDoss(this.value,'sClient')"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(existing.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
       <div class="frow">
         <div class="fg"><label class="flabel">Montant ($)</label><input class="finput" id="sMontant" type="number" value="${existing.montant||''}"></div>
         <div class="fg"><label class="flabel">Date soumission</label><input class="finput" id="sDate" type="date" value="${existing.date_soumission||today()}"></div>
@@ -610,12 +619,13 @@ async function openBonDetail(id) { const b = await api('/bons/'+id); openBonForm
 
 function openBonForm(b={}, dossId=null) {
   api('/dossiers?company_id='+currentCo).then(doss => {
+    _formDoss = doss;
     const html = `
       <div class="frow">
         <div class="fg"><label class="flabel">N° bon *</label><input class="finput" id="bNum" value="${b.numero||''}"></div>
         <div class="fg"><label class="flabel">Date</label><input class="finput" id="bDate" type="date" value="${b.date||today()}"></div>
       </div>
-      <div class="fg"><label class="flabel">Dossier</label><select class="fselect" id="bDoss"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(b.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
+      <div class="fg"><label class="flabel">Dossier</label><select class="fselect" id="bDoss" onchange="fillClientFromDoss(this.value,'bClient')"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(b.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
       <div class="fg"><label class="flabel">Client</label><input class="finput" id="bClient" value="${b.client||''}"></div>
       <div class="fg"><label class="flabel">Description des travaux</label><textarea class="ftextarea" id="bDesc">${b.description||''}</textarea></div>
       <div class="frow">
@@ -731,6 +741,7 @@ async function openFacDetail(id) { const f = await api('/factures/'+id); openFac
 function openFacForm(dossId=null, f={lignes:[]}) {
   facLignes = f.lignes || [{description:'',quantite:1,unite:'unité',prix_unitaire:0}];
   api('/dossiers?company_id='+currentCo).then(doss => {
+    _formDoss = doss;
     const html = `
       <div class="frow">
         <div class="fg"><label class="flabel">N° facture</label><input class="finput" id="fNum" value="${f.numero||''}"></div>
@@ -741,7 +752,7 @@ function openFacForm(dossId=null, f={lignes:[]}) {
         <div class="fg"><label class="flabel">Statut</label><select class="fselect" id="fStatut">${['Brouillon','Envoyée','Payée','En retard'].map(s=>`<option ${f.statut===s?'selected':''}>${s}</option>`).join('')}</select></div>
       </div>
       <div class="fg"><label class="flabel">Client</label><input class="finput" id="fClient" value="${f.client||''}"></div>
-      <div class="fg"><label class="flabel">Dossier</label><select class="fselect" id="fDoss"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(f.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
+      <div class="fg"><label class="flabel">Dossier</label><select class="fselect" id="fDoss" onchange="fillClientFromDoss(this.value,'fClient')"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(f.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
       <div class="fsep"></div><div class="fsec">Lignes de facturation</div>
       <div id="facLignesDiv"></div>
       <button class="btn-sec" onclick="addFacLigne()" style="margin-bottom:12px">+ Ajouter une ligne</button>
