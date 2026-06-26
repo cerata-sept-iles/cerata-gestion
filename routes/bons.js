@@ -18,10 +18,10 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
   const b = req.body;
-  const r = db.prepare(`INSERT INTO bons_travail (company_id,dossier_id,numero,date,client,description,operateur,equipement,heures,taux_horaire,cout_materiaux,materiaux,statut,notes,created_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-    b.company_id, b.dossier_id||null, b.numero, b.date, b.client, b.description,
-    b.operateur, b.equipement, b.heures||0, b.taux_horaire||0, b.cout_materiaux||0,
+  const r = db.prepare(`INSERT INTO bons_travail (company_id,dossier_id,numero,date,client,numero_po,description,operateur,equipement,heures,taux_horaire,cout_materiaux,materiaux,statut,notes,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+    b.company_id, b.dossier_id||null, b.numero, b.date, b.client, b.numero_po||null,
+    b.description, b.operateur, b.equipement, b.heures||0, b.taux_horaire||0, b.cout_materiaux||0,
     b.materiaux, b.statut||'Ouvert', b.notes, req.session.userId
   );
   res.json({ id: r.lastInsertRowid });
@@ -29,9 +29,10 @@ router.post('/', (req, res) => {
 
 router.put('/:id', (req, res) => {
   const b = req.body;
-  db.prepare(`UPDATE bons_travail SET dossier_id=?,numero=?,date=?,client=?,description=?,operateur=?,equipement=?,heures=?,taux_horaire=?,cout_materiaux=?,materiaux=?,statut=?,notes=? WHERE id=?`).run(
-    b.dossier_id||null, b.numero, b.date, b.client, b.description, b.operateur, b.equipement,
-    b.heures, b.taux_horaire, b.cout_materiaux, b.materiaux, b.statut, b.notes, req.params.id
+  db.prepare(`UPDATE bons_travail SET dossier_id=?,numero=?,date=?,client=?,numero_po=?,description=?,operateur=?,equipement=?,heures=?,taux_horaire=?,cout_materiaux=?,materiaux=?,statut=?,notes=? WHERE id=?`).run(
+    b.dossier_id||null, b.numero, b.date, b.client, b.numero_po||null, b.description,
+    b.operateur, b.equipement, b.heures, b.taux_horaire, b.cout_materiaux, b.materiaux,
+    b.statut, b.notes, req.params.id
   );
   res.json({ success: true });
 });
