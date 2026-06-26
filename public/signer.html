@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signature de soumission — Cerata</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; color: #1a1a2e; min-height: 100vh; }
+
+    .header { background: #1a1a2e; color: #fff; padding: 20px 24px; text-align: center; }
+    .header h1 { font-size: 22px; font-weight: 700; }
+    .header p { color: #94a3b8; font-size: 14px; margin-top: 4px; }
+
+    .container { max-width: 780px; margin: 0 auto; padding: 24px 16px 60px; }
+
+    .card { background: #fff; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,.08); margin-bottom: 20px; overflow: hidden; }
+    .card-header { background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 14px 20px; font-weight: 700; font-size: 15px; color: #334155; display: flex; align-items: center; gap: 8px; }
+    .card-body { padding: 20px; }
+
+    .soum-title { font-size: 22px; font-weight: 800; color: #1a1a2e; margin-bottom: 6px; }
+    .soum-num { font-size: 13px; color: #64748b; margin-bottom: 16px; }
+    .soum-montant { font-size: 28px; font-weight: 900; color: #2563eb; margin: 12px 0; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 500px) { .grid { grid-template-columns: 1fr; } }
+
+    .info-row { display: flex; flex-direction: column; gap: 3px; }
+    .info-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; font-weight: 600; }
+    .info-value { font-size: 14px; color: #1e293b; font-weight: 500; }
+
+    .description-text { font-size: 14px; color: #475569; line-height: 1.6; white-space: pre-wrap; }
+
+    .conditions-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 16px; font-size: 13px; color: #78350f; line-height: 1.7; }
+    .conditions-box strong { color: #92400e; }
+
+    .sig-area { position: relative; }
+    .sig-label { font-size: 13px; color: #64748b; margin-bottom: 10px; }
+    canvas#sigCanvas { width: 100%; height: 180px; border: 2px dashed #cbd5e1; border-radius: 10px; cursor: crosshair; background: #fafcff; touch-action: none; display: block; }
+    canvas#sigCanvas.signed { border-color: #10b981; border-style: solid; background: #f0fdf4; }
+    .sig-hint { font-size: 12px; color: #94a3b8; text-align: center; margin-top: 6px; }
+    .btn-clear { background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 14px; font-size: 12px; color: #64748b; cursor: pointer; margin-top: 8px; }
+    .btn-clear:hover { background: #f8fafc; }
+
+    .name-input { width: 100%; padding: 12px 14px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: 15px; color: #1e293b; margin-top: 4px; }
+    .name-input:focus { outline: none; border-color: #2563eb; }
+
+    .btn-sign { width: 100%; padding: 16px; background: #2563eb; color: #fff; border: none; border-radius: 12px; font-size: 17px; font-weight: 700; cursor: pointer; margin-top: 6px; transition: background .2s; }
+    .btn-sign:hover { background: #1d4ed8; }
+    .btn-sign:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    .status-msg { text-align: center; padding: 16px; border-radius: 10px; font-size: 14px; margin-top: 10px; display: none; }
+    .status-msg.ok { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .status-msg.err { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+    /* Écran de succès */
+    .success-screen { display: none; text-align: center; padding: 40px 20px; }
+    .success-screen .checkmark { font-size: 64px; margin-bottom: 16px; }
+    .success-screen h2 { font-size: 24px; font-weight: 800; color: #166534; margin-bottom: 8px; }
+    .success-screen p { color: #4b5563; font-size: 15px; line-height: 1.6; }
+    .success-screen .sig-preview { max-width: 320px; margin: 20px auto; border: 1px solid #e2e8f0; border-radius: 10px; background: #f0fdf4; }
+
+    /* Déjà signé */
+    .already-signed { text-align: center; padding: 30px 20px; }
+    .already-signed .icon { font-size: 48px; margin-bottom: 12px; }
+
+    .loading { text-align: center; padding: 60px 20px; }
+    .spinner { width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-page { text-align: center; padding: 60px 20px; }
+    .error-page .icon { font-size: 48px; margin-bottom: 12px; }
+    .error-page h2 { color: #dc2626; font-size: 20px; margin-bottom: 8px; }
+    .error-page p { color: #6b7280; }
+
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+    .badge-attente { background: #fef9c3; color: #92400e; }
+    .badge-acceptee { background: #dcfce7; color: #166534; }
+    .badge-residentiel { background: #e0f2fe; color: #0369a1; }
+    .badge-commercial { background: #fdf4ff; color: #7e22ce; }
+  </style>
+</head>
+<body>
+<div class="header">
+  <h1 id="companyName">Chargement…</h1>
+  <p>Document de soumission — Signature électronique requise</p>
+</div>
+<div class="container" id="app">
+  <div class="loading">
+    <div class="spinner"></div>
+    <p style="color:#64748b">Chargement de la soumission…</p>
+  </div>
+</div>
+<script>
+const token = location.pathname.split('/').pop();
+let soumData = null;
+let sigCanvas, sigCtx, isDrawing = false, lastX = 0, lastY = 0, hasSig = false;
+
+async function init() {
+  try {
+    const r = await fetch('/api/soumissions/publique/' + token + '/data');
+    if (!r.ok) {
+      const e = await r.json();
+      showError(e.error || 'Lien invalide ou expiré');
+      return;
+    }
+    soumData = await r.json();
+    document.getElementById('companyName').textContent = soumData.company_nom || 'Cerata';
+    document.title = 'Soumission ' + (soumData.numero || '#'+soumData.id) + ' — Signature';
+    if (soumData.deja_signe || soumData.signed_at) {
+      showAlreadySigned();
+    } else {
+      renderForm();
+    }
+  } catch(e) {
+    showError('Erreur de connexion. Veuillez réessayer.');
+  }
+}
+
+function fmt(n) {
+  return new Intl.NumberFormat('fr-CA', {style:'currency',currency:'CAD'}).format(n||0);
+}
+
+function fmtDate(d) {
+  if (!d) return '┄';
+  return new Date(d).toLocaleDateString('fr-CA', {year:'numeric',month:'long',day:'numeric'});
+}
+
+function renderForm() {
+  const s = soumData;
+  const app = document.getElementById('app');
+  app.innerHTML = ''
+    + '<div class="card">'
+    + '<div class="card-header">📋 Détails de la soumission</div>'
+    + '<div class="card-body">'
+    + '<div class="soum-title">' + (s.titre||'┄') + '</div>'
+    + '<div class="soum-num">N&nbsp;' + (s.numero||s.id) + '&nbsp;•&nbsp;<span class="badge ' + (s.type==='Commercial'?'badge-commercial':'badge-residentiel') + '">' + (s.type||'Résidentiel') + '</span>&nbsp;•&nbsp;<span class="badge badge-attente">' + s.statut + '</span></div>'
+    + '<div class="soum-montant">' + fmt(s.montant) + '</div>'
+    + '<div class="grid" style="margin-top:16px">'
+    + '<div class="info-row"><span class="info-label">Client</span><span class="info-value">' + (s.client||'┄') + '</span></div>'
+    + (s.dossier_nom ? '<div class="info-row"><span class="info-label">Dossier</span><span class="info-value">📁 ' + s.dossier_nom + '</span></div>' : '')
+    + '<div class="info-row"><span class="info-label">Date de soumission</span><span class="info-value">' + fmtDate(s.date_soumission) + '</span></div>'
+    + '<div class="info-row"><span class="info-label">Date d\'expiration</span><span class="info-value">' + fmtDate(s.date_expiration) + '</span></div>'
+    + (s.representant ? '<div class="info-row"><span class="info-label">Représentant</span><span class="info-value">' + s.representant + '</span></div>' : '')
+    + (s.type_travaux ? '<div class="info-row"><span class="info-label">Type de travaux</span><span class="info-value">' + s.type_travaux + '</span></div>' : '')
+    + (s.numero_po ? '<div class="info-row"><span class="info-label">N&nbsp;PO</span><span class="info-value">' + s.numero_po + '</span></div>' : '')
+    + '</div></div></div>'
+    + (s.description ? '<div class="card"><div class="card-header">📝 Description des travaux</div><div class="card-body"><p class="description-text">' + s.description + '</p></div></div>' : '')
+    + (s.notes ? '<div class="card"><div class="card-header">💬 Notes</div><div class="card-body"><p class="description-text">' + s.notes + '</p></div></div>' : '')
+    + '<div class="card"><div class="card-header">☖️ Conditions d\'acceptation</div><div class="card-body"><div class="conditions-box"><strong>En signant ce document, vous confirmez :</strong><br><br>• Avoir lu et compris l\'ensemble des détails de cette soumission.<br>• Accepter les travaux décrits au montant indiqué de <strong>' + fmt(s.montant) + '</strong>.<br>• Autoriser ' + (s.company_nom||'Cerata') + ' à procéder aux travaux selon les modalités convenues.<br>• Que cette signature électronique a la même valeur légale qu\'une signature manuscrite conformément aux lois québécoises sur la preuve (LCCJTI).<br><br>En cas de question, veuillez communiquer avec nous avant de signer.</div></div></div>'
+    + '<div class="card"><div class="card-header">✍️ Votre signature</div><div class="card-body">'
+    + '<div style="margin-bottom:16px"><label class="info-label" style="display:block;margin-bottom:6px">Votre nom complet *</label><input class="name-input" id="signeName" placeholder="Ex: Jean Tremblay" autocomplete="name"></div>'
+    + '<div class="sig-area"><p class="sig-label">Signez dans l\'espace ci-dessous avec votre souris ou votre doigt :</p><canvas id="sigCanvas"></canvas><p class="sig-hint" id="sigHint">Signez ici ↑</p><button class="btn-clear" onclick="clearSig()">✕ Effacer la signature</button></div>'
+    + '<button class="btn-sign" id="btnSign" onclick="soumettreSig()" style="margin-top:20px" disabled>✍️ Signer et accepter la soumission</button>'
+    + '<div class="status-msg" id="statusMsg"></div></div></div>';
+  initCanvas();
+  document.getElementById('signeName').addEventListener('input', checkReady);
+}
+
+function initCanvas() {
+  sigCanvas = document.getElementById('sigCanvas');
+  sigCtx = sigCanvas.getContext('2d');
+  sigCanvas.width = sigCanvas.offsetWidth * window.devicePixelRatio;
+  sigCanvas.height = 180 * window.devicePixelRatio;
+  sigCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  sigCtx.strokeStyle = '#1a1a2e';
+  sigCtx.lineWidth = 2.5;
+  sigCtx.lineCap = 'round';
+  sigCtx.lineJoin = 'round';
+  sigCanvas.addEventListener('mousedown', startDraw);
+  sigCanvas.addEventListener('mousemove', draw);
+  sigCanvas.addEventListener('mouseup', stopDraw);
+  sigCanvas.addEventListener('mouseleave', stopDraw);
+  sigCanvas.addEventListener('touchstart', e => { e.preventDefault(); startDraw(e.touches[0]); }, {passive:false});
+  sigCanvas.addEventListener('touchmove', e => { e.preventDefault(); draw(e.touches[0]); }, {passive:false});
+  sigCanvas.addEventListener('touchend', stopDraw);
+}
+
+function getPos(e) {
+  const rect = sigCanvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function startDraw(e) {
+  isDrawing = true;
+  const p = getPos(e);
+  lastX = p.x; lastY = p.y;
+  sigCtx.beginPath();
+  sigCtx.moveTo(lastX, lastY);
+}
+
+function draw(e) {
+  if (!isDrawing) return;
+  const p = getPos(e);
+  sigCtx.lineTo(p.x, p.y);
+  sigCtx.stroke();
+  lastX = p.x; lastY = p.y;
+  if (!hasSig) {
+    hasSig = true;
+    sigCanvas.classList.add('signed');
+    document.getElementById('sigHint').textContent = 'Signature en cours…';
+    checkReady();
+  }
+}
+
+function stopDraw() {
+  isDrawing = false;
+  if (hasSig) document.getElementById('sigHint').textContent = 'Signature apposée ✓;';
+}
+
+function clearSig() {
+  sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+  hasSig = false;
+  sigCanvas.classList.remove('signed');
+  document.getElementById('sigHint').textContent = 'Signez ici ₑ';
+  checkReady();
+}
+
+function checkReady() {
+  const btn = document.getElementById('btnSign');
+  if (btn) btn.disabled = !(hasSig && document.getElementById('signeName').value.trim());
+}
+
+acync function soumettreSig() {
+  const nom = document.getElementById('signeName').value.trim();
+  if (!nom) { showMsg('Veuillez entrer votre nom complet.', 'err'); return; }
+  if (!hasSig) { showMsg('Veuillez retarder apposer votre signature.', 'err'); return; }
+  const btn = document.getElementById('btnSign');
+  btn.disabled = true;
+  btn.textContent = '⏳ Envoi en cours…';
+  const sigData = sigCanvas.toDataURL('image/png');
+  try {
+    const r = await fetch('/api/soumissions/publique/' + token + '/signer', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ signature_data: sigData, signe_par: nom })
+    });
+    const j = await r.json();
+    if (r.ok && j.success) {
+      showSuccessScreen(sigData, nom);
+    } else {
+      showMsg(j.error||'Erreur lors de la signature.', 'err');
+      btn.disabled = false;
+      btn.textContent = '✍️ Signer et accepter la soumission';
+    }
+  } catch(e) {
+    showMsg('Erreur reseau. Veuillez réessayer.', 'err');
+    btn.disabled = false;
+    btn.textContent = '✍️ Signer et accepter la soumission';
+  }
+}
+
+function showMsg(msg, type) {
+  const el = document.getElementById('statusMsg');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'status-msg ' + type;
+  el.style.display = 'block';
+}
+
+function showSuccessScreen(sigData, nom) {
+  document.getElementById('app').innerHTML = '<div class="card"><div class="card-body success-screen" style="display:block"><div class="checkmark">✅</div><h2>Soumission acceptée !</h2><p>Merci <strong>' + nom + '</strong>, votre signature a bien été enregistrée.<br>La soumission <strong>' + (soumData.numero||'#'+soumData.id) + '</strong> est maintenant marquée <strong>Acceptée</strong>.</p><p style="margin-top:12px;color:#6b7280;font-size:13px">Vous recevrez une confirmation de notre équipe sous peu.</p><div style="margin-top:24px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px"><p style="font-size:12px;color:#166534;font-weight:600;margin-bottom:8px">Votre signature enregistrée :</p><img src="' + sigData + '" alt="Signature" style="max-width:280px;max-height:100px;border-radius:6px;background:#fff;padding:4px;"></div><p style="margin-top:20px;color:#94a3b8;font-size:12px">Vous pouvez fermer cette fenêtre.</p></div></div>';
+}
+
+function showAlreadySigned() {
+  const s = soumData;
+  document.getElementById('app').innerHTML = '<div class="card"><div class="card-body already-signed"><div class="icon">✅</div><h2 style="font-size:20px;font-weight:800;color:#166534;margin-bottom:8px">Soumission déjà signée</h2><p style="color:#4b5563">Cette soumission a déjà été acceptée et signée.</p>'
+    + (s.signed_at ? '<p style="color:#94a3b8;font-size:13px;margin-top:8px">Signée le ' + new Date(s.signed_at).toLocaleDateString('fr-CA',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'}) + '</p>' : '')
+    + (s.signature_data ? '<div style="margin-top:20px"><img src="' + s.signature_data + '" alt="Signature" style="max-width:260px;border:1px solid #e2e8f0;border-radius:8px;background:#f0fdf4;padding:8px"></div>' : '')
+    + '</div></div>';
+}
+
+function showError(msg) {
+  document.getElementById('app').innerHTML = '<div class="card"><div class="card-body error-page"><div class="icon">🔗</div><h2>Lien invalide</h2><p>' + msg + '</p><p style="margin-top:12px;color:#94a3b8;font-size:13px">Si vous pensez qu\'il s\'agit d\'une erreur, contactez l\'entreprise qui vous a envoyé ce lien.</p></div></div>';
+}
+
+init();
+</script>
+</body>
+</html>
