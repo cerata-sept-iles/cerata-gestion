@@ -573,6 +573,7 @@ function openSoumForm(dossId=null, existing={}) {
       <div class="fg" style="margin-top:12px"><label class="flabel">Notes</label><textarea class="ftextarea" id="sNotes">${existing.notes||''}</textarea></div>`;
     openDrawer(existing.id ? 'Modifier soumission' : 'Nouvelle soumission', html, `
       <button class="btn-prim" onclick="saveSoum(${existing.id||''})">Enregistrer</button>
+      ${existing.id?`<button class="btn-sec" style="background:#dbeafe;color:#1d4ed8" onclick="envoyerSoum(${existing.id},'${existing.client||''}')">Envoyer par courriel</button>`:''}
       ${existing.id?`<button class="btn-danger" onclick="delSoum(${existing.id})">Supprimer</button>`:''}
       <button class="btn-sec" onclick="closeDrawer({target:document.getElementById('drawerOverlay')})">Annuler</button>`);
   });
@@ -590,6 +591,26 @@ async function saveSoum(id) {
   } catch(e) { toast(e.message); }
 }
 async function delSoum(id) { if(!confirm('Supprimer?'))return; await api('/soumissions/'+id,{method:'DELETE'}); closeDrawer({target:document.getElementById('drawerOverlay')}); toast('Supprimée'); renderSoumissions(); }
+
+async function envoyerSoum(id, clientNom) {
+  const email = prompt("Entrez l'adresse courriel du client (" + clientNom + ") :", "");
+  if (!email) return;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast("Adresse courriel invalide"); return; }
+  toast("Envoi en cours...");
+  try {
+    const r = await api("/soumissions/"+id+"/envoyer", {method:"POST", body: JSON.stringify({email_client: email})});
+    closeDrawer({target:document.getElementById("drawerOverlay")});
+    toast("Courriel envoye a " + email);
+    renderSoumissions();
+  } catch(e) {
+    if (e && e.lien) {
+      if (confirm("Erreur email. Copier le lien ?\n" + e.lien)) {
+        if (navigator.clipboard) navigator.clipboard.writeText(e.lien);
+        toast("Lien copie");
+      }
+    } else { toast("Erreur: " + (e && e.message ? e.message : e)); }
+  }
+}
 async function openSoumDetail(id) { const s = await api('/soumissions/'+id); openSoumForm(null, s); }
 
 // ===== BONS DE TRAVAIL =====
