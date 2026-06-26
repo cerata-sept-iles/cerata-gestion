@@ -43,7 +43,7 @@ function init() {
       email TEXT,
       adresse_client TEXT,
       adresse_travaux TEXT,
-      langue TEXT DEFAULT 'Français',
+      langue TEXT DEFAULT 'FranÃ§ais',
       type_travaux TEXT,
       categorie TEXT,
       representant TEXT,
@@ -159,7 +159,7 @@ function init() {
       facture_id INTEGER NOT NULL,
       description TEXT,
       quantite REAL DEFAULT 1,
-      unite TEXT DEFAULT 'unité',
+      unite TEXT DEFAULT 'unitÃ©',
       prix_unitaire REAL DEFAULT 0,
       total REAL DEFAULT 0,
       FOREIGN KEY (facture_id) REFERENCES factures(id) ON DELETE CASCADE
@@ -216,9 +216,9 @@ function init() {
 
   // Seed default companies
   const companies = [
-    { id: 'cerata', nom: 'Cerata Sept-Îles inc', description: 'Gestion générale' },
-    { id: 'pompage', nom: 'Pompage béton 7-Îles', description: 'Pompage de béton' },
-    { id: 'coupage', nom: 'Coupage de béton St-Pierre', description: 'Découpe et carottage' }
+    { id: 'cerata', nom: 'Cerata Sept-Ãles inc', description: 'Gestion gÃ©nÃ©rale' },
+    { id: 'pompage', nom: 'Pompage bÃ©ton 7-Ãles', description: 'Pompage de bÃ©ton' },
+    { id: 'coupage', nom: 'Coupage de bÃ©ton St-Pierre', description: 'DÃ©coupe et carottage' }
   ];
   const insertCo = db.prepare('INSERT OR IGNORE INTO companies (id, nom, description) VALUES (?, ?, ?)');
   companies.forEach(c => insertCo.run(c.id, c.nom, c.description));
@@ -227,10 +227,21 @@ function init() {
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get('info@cerata.ca');
   if (!existing) {
     const hash = bcrypt.hashSync('Cerata2024!', 10);
-    db.prepare('INSERT INTO users (nom, email, password, role) VALUES (?, ?, ?, ?)').run('Stéphanie Frattin', 'info@cerata.ca', hash, 'admin');
-    console.log('✅ Compte admin créé: info@cerata.ca / Cerata2024!');
+    db.prepare('INSERT INTO users (nom, email, password, role) VALUES (?, ?, ?, ?)').run('StÃ©phanie Frattin', 'info@cerata.ca', hash, 'admin');
+    console.log('â Compte admin crÃ©Ã©: info@cerata.ca / Cerata2024!');
   }
 }
 
 init();
+
+// Migrations: add new columns if they don't exist yet
+const migrations = [
+  "ALTER TABLE soumissions ADD COLUMN type TEXT DEFAULT 'Résidentiel'",
+  "ALTER TABLE soumissions ADD COLUMN numero_po TEXT",
+  "ALTER TABLE bons_travail ADD COLUMN numero_po TEXT",
+  "ALTER TABLE rapports_service ADD COLUMN numero_po TEXT",
+  "ALTER TABLE factures ADD COLUMN numero_po TEXT",
+];
+migrations.forEach(sql => { try { db.exec(sql); } catch(e) { /* column already exists */ } });
+
 module.exports = db;
