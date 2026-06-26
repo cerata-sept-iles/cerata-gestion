@@ -141,6 +141,12 @@ function fillClientFromDoss(dossId, fieldId) {
   const d = _formDoss.find(x => String(x.id) === String(dossId));
   if (d && d.client) { const el = document.getElementById(fieldId); if (el) el.value = d.client; }
 }
+async function fillPoFromDoss(dossId, fieldId) {
+  if (!dossId) return;
+  try { const r = await api('/soumissions/po/' + dossId); if (r && r.numero_po) { const el = document.getElementById(fieldId); if (el) el.value = r.numero_po; } } catch(e) {}
+}
+function fillDossClientAndPo(dossId) { fillClientFromDoss(dossId, 'rClient'); fillPoFromDoss(dossId, 'rNumPO'); }
+function toggleSoumPo() { const t = document.getElementById('sType'); const row = document.getElementById('sPORow'); if (row) row.style.display = (t && t.value === 'Commercial') ? 'block' : 'none'; }
 
 // ===== DRAWER =====
 function openDrawer(title, bodyHTML, footerHTML) {
@@ -552,6 +558,8 @@ function openSoumForm(dossId=null, existing={}) {
     const html = `
       <div class="fg"><label class="flabel">Titre *</label><input class="finput" id="sTitre" value="${existing.titre||''}" placeholder="Ex: Pompage béton fondation - 45m³"></div>
       <div class="fg"><label class="flabel">Client *</label><input class="finput" id="sClient" value="${existing.client||''}"></div>
+      <div class="fg"><label class="flabel">Type de soumission</label><select class="fselect" id="sType" onchange="toggleSoumPo()"><option value="Résidentiel" ${(existing.type||'Résidentiel')==='Résidentiel'?'selected':''}>Résidentiel</option><option value="Commercial" ${existing.type==='Commercial'?'selected':''}>Commercial</option></select></div>
+      <div class="fg" id="sPORow" style="display:${existing.type==='Commercial'?'block':'none'}"><label class="flabel">N° PO (client)</label><input class="finput" id="sNumPO" value="${existing.numero_po||''}" placeholder="Ex: PO-2024-001"></div>
       <div class="fg"><label class="flabel">Dossier lié</label><select class="fselect" id="sDoss" onchange="fillClientFromDoss(this.value,'sClient')"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(existing.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
       <div class="frow">
         <div class="fg"><label class="flabel">Montant ($)</label><input class="finput" id="sMontant" type="number" value="${existing.montant||''}"></div>
@@ -573,7 +581,7 @@ function openSoumForm(dossId=null, existing={}) {
 function pickSoumStatut(btn, val) { document.querySelectorAll('#soumPills .sp').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); document.getElementById('sStatut').value = val; }
 
 async function saveSoum(id) {
-  const data = { company_id: currentCo, titre: fv('sTitre'), client: fv('sClient'), dossier_id: fv('sDoss')||null, montant: fv('sMontant'), date_soumission: fv('sDate'), date_expiration: fv('sExp'), representant: fv('sRep'), statut: fv('sStatut')||'En attente', notes: fv('sNotes') };
+  const data = { company_id: currentCo, titre: fv('sTitre'), client: fv('sClient'), dossier_id: fv('sDoss')||null, montant: fv('sMontant'), date_soumission: fv('sDate'), date_expiration: fv('sExp'), representant: fv('sRep'), statut: fv('sStatut')||'En attente', type: fv('sType')||'Résidentiel', numero_po: fv('sNumPO')||null, notes: fv('sNotes') };
   if (!data.titre || !data.client) { toast('Titre et client requis'); return; }
   try {
     if (id) await api('/soumissions/'+id, {method:'PUT',body:JSON.stringify(data)});
@@ -625,8 +633,9 @@ function openBonForm(b={}, dossId=null) {
         <div class="fg"><label class="flabel">N° bon *</label><input class="finput" id="bNum" value="${b.numero||''}"></div>
         <div class="fg"><label class="flabel">Date</label><input class="finput" id="bDate" type="date" value="${b.date||today()}"></div>
       </div>
-      <div class="fg"><label class="flabel">Dossier</label><select class="fselect" id="bDoss" onchange="fillClientFromDoss(this.value,'bClient')"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(b.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
+      <div class="fg"><label class="flabel">Dossier</label><select class="fselect" id="bDoss" onchange="fillClientFromDoss(this.value,'bClient');fillPoFromDoss(this.value,'bNumPO')"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(b.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
       <div class="fg"><label class="flabel">Client</label><input class="finput" id="bClient" value="${b.client||''}"></div>
+      <div class="fg"><label class="flabel">N° PO</label><input class="finput" id="bNumPO" value="${b.numero_po||''}" placeholder="Laisser vide si aucun"></div>
       <div class="fg"><label class="flabel">Description des travaux</label><textarea class="ftextarea" id="bDesc">${b.description||''}</textarea></div>
       <div class="frow">
         <div class="fg"><label class="flabel">Opérateur</label><input class="finput" id="bOp" value="${b.operateur||''}"></div>
@@ -654,7 +663,7 @@ function calcBonTotal() {
   t.textContent = 'Total estimé: ' + fmt(total);
 }
 async function saveBon(id) {
-  const data = { company_id: currentCo, numero: fv('bNum'), date: fv('bDate'), dossier_id: fv('bDoss')||null, client: fv('bClient'), description: fv('bDesc'), operateur: fv('bOp'), equipement: fv('bEquip'), heures: fv('bHrs'), taux_horaire: fv('bTaux'), cout_materiaux: fv('bMat'), materiaux: fv('bMatDesc'), statut: fv('bStatut'), notes: fv('bNotes') };
+  const data = { company_id: currentCo, numero: fv('bNum'), date: fv('bDate'), dossier_id: fv('bDoss')||null, client: fv('bClient'), numero_po: fv('bNumPO')||null, description: fv('bDesc'), operateur: fv('bOp'), equipement: fv('bEquip'), heures: fv('bHrs'), taux_horaire: fv('bTaux'), cout_materiaux: fv('bMat'), materiaux: fv('bMatDesc'), statut: fv('bStatut'), notes: fv('bNotes') };
   if (!data.numero) { toast('Numéro requis'); return; }
   if (id) await api('/bons/'+id, {method:'PUT',body:JSON.stringify(data)});
   else await api('/bons', {method:'POST',body:JSON.stringify(data)});
@@ -688,7 +697,8 @@ function openRapForm(r={}, dossId=null) {
         <div class="fg"><label class="flabel">N° rapport</label><input class="finput" id="rNum" value="${r.numero||''}"></div>
         <div class="fg"><label class="flabel">Date *</label><input class="finput" id="rDate" type="date" value="${r.date||today()}"></div>
       </div>
-      <div class="fg"><label class="flabel">Dossier</label><select class="fselect" id="rDoss"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(r.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
+      <div class="fg"><label class="flabel">Dossier</label><select class="fselect" id="rDoss" onchange="fillDossClientAndPo(this.value)"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(r.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
+      <div class="fg"><label class="flabel">N° PO</label><input class="finput" id="rNumPO" value="${r.numero_po||''}" placeholder="Laisser vide si aucun"></div>
       <div class="frow">
         <div class="fg"><label class="flabel">Technicien</label><input class="finput" id="rTech" value="${r.technicien||''}"></div>
         <div class="fg"><label class="flabel">Équipement</label><input class="finput" id="rEquip" value="${r.equipement||''}"></div>
@@ -708,7 +718,7 @@ function openRapForm(r={}, dossId=null) {
   });
 }
 async function saveRap(id) {
-  const data = { company_id: currentCo, numero: fv('rNum'), date: fv('rDate'), dossier_id: fv('rDoss')||null, technicien: fv('rTech'), equipement: fv('rEquip'), travaux: fv('rTrav'), heures: fv('rHrs'), meteo: fv('rMeteo'), temperature: fv('rTemp'), observations: fv('rObs'), statut: fv('rStatut') };
+  const data = { company_id: currentCo, numero: fv('rNum'), date: fv('rDate'), dossier_id: fv('rDoss')||null, numero_po: fv('rNumPO')||null, technicien: fv('rTech'), equipement: fv('rEquip'), travaux: fv('rTrav'), heures: fv('rHrs'), meteo: fv('rMeteo'), temperature: fv('rTemp'), observations: fv('rObs'), statut: fv('rStatut') };
   if (!data.date) { toast('Date requise'); return; }
   if (id) await api('/rapports/'+id,{method:'PUT',body:JSON.stringify(data)});
   else await api('/rapports',{method:'POST',body:JSON.stringify(data)});
@@ -752,7 +762,7 @@ function openFacForm(dossId=null, f={lignes:[]}) {
         <div class="fg"><label class="flabel">Statut</label><select class="fselect" id="fStatut">${['Brouillon','Envoyée','Payée','En retard'].map(s=>`<option ${f.statut===s?'selected':''}>${s}</option>`).join('')}</select></div>
       </div>
       <div class="fg"><label class="flabel">Client</label><input class="finput" id="fClient" value="${f.client||''}"></div>
-      <div class="fg"><label class="flabel">Dossier</label><select class="fselect" id="fDoss" onchange="fillClientFromDoss(this.value,'fClient')"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(f.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
+      <div class="fg"><label class="flabel">Dossier</label><select class="fselect" id="fDoss" onchange="fillClientFromDoss(this.value,'fClient');fillPoFromDoss(this.value,'fNumPO')"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(f.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
       <div class="fsep"></div><div class="fsec">Lignes de facturation</div>
       <div id="facLignesDiv"></div>
       <button class="btn-sec" onclick="addFacLigne()" style="margin-bottom:12px">+ Ajouter une ligne</button>
@@ -787,7 +797,7 @@ function calcFac() {
 }
 async function saveFac(id) {
   const sous = facLignes.reduce((a,l)=>a+(l.quantite||1)*(l.prix_unitaire||0),0);
-  const data = { company_id: currentCo, numero: fv('fNum'), date: fv('fDate'), date_echeance: fv('fEch'), statut: fv('fStatut'), client: fv('fClient'), dossier_id: fv('fDoss')||null, sous_total: sous, notes: fv('fNotes'), lignes: facLignes };
+  const data = { company_id: currentCo, numero: fv('fNum'), date: fv('fDate'), date_echeance: fv('fEch'), statut: fv('fStatut'), client: fv('fClient'), dossier_id: fv('fDoss')||null, numero_po: fv('fNumPO')||null, sous_total: sous, notes: fv('fNotes'), lignes: facLignes };
   if (id) await api('/factures/'+id,{method:'PUT',body:JSON.stringify(data)});
   else await api('/factures',{method:'POST',body:JSON.stringify(data)});
   closeDrawer({target:document.getElementById('drawerOverlay')}); toast('Facture enregistrée ✓'); renderFactures();
