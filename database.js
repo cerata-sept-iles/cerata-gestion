@@ -165,6 +165,17 @@ function init() {
       FOREIGN KEY (facture_id) REFERENCES factures(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS soumission_lignes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      soumission_id INTEGER NOT NULL,
+      description TEXT,
+      quantite REAL DEFAULT 1,
+      unite TEXT DEFAULT 'unité',
+      prix_unitaire REAL DEFAULT 0,
+      total REAL DEFAULT 0,
+      FOREIGN KEY (soumission_id) REFERENCES soumissions(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS contacts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       company_id TEXT NOT NULL,
@@ -248,6 +259,9 @@ const migrations = [
   "ALTER TABLE soumissions ADD COLUMN signature_data TEXT",
   "ALTER TABLE soumissions ADD COLUMN signed_at TEXT",
   "ALTER TABLE soumissions ADD COLUMN signe_par TEXT",
+  "ALTER TABLE soumissions ADD COLUMN forfaitaire INTEGER DEFAULT 0",
+  "ALTER TABLE soumissions ADD COLUMN tps_incluse INTEGER DEFAULT 1",
+  "ALTER TABLE soumissions ADD COLUMN tvq_incluse INTEGER DEFAULT 1",
 ];
 migrations.forEach(sql => { try { db.exec(sql); } catch(e) { /* column already exists */ } });
 
