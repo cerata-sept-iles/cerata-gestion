@@ -24,16 +24,16 @@ router.post('/', (req, res) => {
   const tps = (b.sous_total || 0) * 0.05;
   const tvq = (b.sous_total || 0) * 0.09975;
   const total = (b.sous_total || 0) + tps + tvq;
-  const r = db.prepare(`INSERT INTO factures (company_id,dossier_id,soumission_id,numero,date,date_echeance,client,adresse_client,description,sous_total,tps,tvq,total,statut,notes,created_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+  const r = db.prepare(`INSERT INTO factures (company_id,dossier_id,soumission_id,numero,date,date_echeance,client,adresse_client,numero_po,description,sous_total,tps,tvq,total,statut,notes,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
     b.company_id, b.dossier_id||null, b.soumission_id||null, b.numero||genNum(), b.date, b.date_echeance,
-    b.client, b.adresse_client, b.description, b.sous_total||0, tps, tvq, total,
+    b.client, b.adresse_client, b.numero_po||null, b.description, b.sous_total||0, tps, tvq, total,
     b.statut||'Brouillon', b.notes, req.session.userId
   );
   const fid = r.lastInsertRowid;
   if (b.lignes && Array.isArray(b.lignes)) {
     const ins = db.prepare('INSERT INTO facture_lignes (facture_id,description,quantite,unite,prix_unitaire,total) VALUES (?,?,?,?,?,?)');
-    b.lignes.forEach(l => ins.run(fid, l.description, l.quantite||1, l.unite||'unité', l.prix_unitaire||0, (l.quantite||1)*(l.prix_unitaire||0)));
+    b.lignes.forEach(l => ins.run(fid, l.description, l.quantite||1, l.unite||'unitÃ©', l.prix_unitaire||0, (l.quantite||1)*(l.prix_unitaire||0)));
   }
   res.json({ id: fid });
 });
@@ -43,14 +43,14 @@ router.put('/:id', (req, res) => {
   const tps = (b.sous_total || 0) * 0.05;
   const tvq = (b.sous_total || 0) * 0.09975;
   const total = (b.sous_total || 0) + tps + tvq;
-  db.prepare(`UPDATE factures SET dossier_id=?,numero=?,date=?,date_echeance=?,client=?,adresse_client=?,description=?,sous_total=?,tps=?,tvq=?,total=?,statut=?,notes=? WHERE id=?`).run(
+  db.prepare(`UPDATE factures SET dossier_id=?,numero=?,date=?,date_echeance=?,client=?,adresse_client=?,numero_po=?,description=?,sous_total=?,tps=?,tvq=?,total=?,statut=?,notes=? WHERE id=?`).run(
     b.dossier_id||null, b.numero, b.date, b.date_echeance, b.client, b.adresse_client,
-    b.description, b.sous_total, tps, tvq, total, b.statut, b.notes, req.params.id
+    b.numero_po||null, b.description, b.sous_total, tps, tvq, total, b.statut, b.notes, req.params.id
   );
   if (b.lignes) {
     db.prepare('DELETE FROM facture_lignes WHERE facture_id = ?').run(req.params.id);
     const ins = db.prepare('INSERT INTO facture_lignes (facture_id,description,quantite,unite,prix_unitaire,total) VALUES (?,?,?,?,?,?)');
-    b.lignes.forEach(l => ins.run(req.params.id, l.description, l.quantite||1, l.unite||'unité', l.prix_unitaire||0, (l.quantite||1)*(l.prix_unitaire||0)));
+    b.lignes.forEach(l => ins.run(req.params.id, l.description, l.quantite||1, l.unite||'unitÃ©', l.prix_unitaire||0, (l.quantite||1)*(l.prix_unitaire||0)));
   }
   res.json({ success: true });
 });
