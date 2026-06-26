@@ -45,8 +45,19 @@ app.get('/api/companies', (req, res) => {
   res.json(db.prepare('SELECT * FROM companies').all());
 });
 
-// Feuilles de temps
+// PO unifié: cherche dans bons → rapports → soumissions pour un dossier
 const { requireAuth } = require('./middleware/auth');
+app.get('/api/dossiers/:id/po', requireAuth, (req, res) => {
+  const did = req.params.id;
+  const bon = db.prepare("SELECT numero_po FROM bons_travail WHERE dossier_id=? AND numero_po IS NOT NULL AND numero_po != '' ORDER BY created_at DESC LIMIT 1").get(did);
+  if (bon) return res.json({ numero_po: bon.numero_po });
+  const rap = db.prepare("SELECT numero_po FROM rapports_service WHERE dossier_id=? AND numero_po IS NOT NULL AND numero_po != '' ORDER BY created_at DESC LIMIT 1").get(did);
+  if (rap) return res.json({ numero_po: rap.numero_po });
+  const soum = db.prepare("SELECT numero_po FROM soumissions WHERE dossier_id=? AND type='Commercial' AND statut='Accept\u00e9e' AND numero_po IS NOT NULL AND numero_po != '' ORDER BY created_at DESC LIMIT 1").get(did);
+  res.json({ numero_po: soum ? soum.numero_po : null });
+});
+
+// Feuilles de temps
 app.get('/api/temps', requireAuth, (req, res) => {
   const { company_id, dossier_id } = req.query;
   let sql = 'SELECT t.*, d.nom as dossier_nom FROM feuilles_temps t LEFT JOIN dossiers d ON t.dossier_id = d.id WHERE 1=1';
