@@ -116,4 +116,28 @@ function genNum() {
   return `SOM-${d.getFullYear().toString().slice(2)}${String(d.getMonth()+1).padStart(2,'0')}-${Math.floor(Math.random()*900+100)}`;
 }
 
+// ===== Lignes de soumission =====
+router.get('/:id/lignes', (req, res) => {
+  res.json(db.prepare('SELECT * FROM soumission_lignes WHERE soumission_id = ? ORDER BY id').all(req.params.id));
+});
+
+router.post('/:id/lignes', (req, res) => {
+  const { description, quantite, unite, prix_unitaire } = req.body;
+  const total = parseFloat(((quantite||1) * (prix_unitaire||0)).toFixed(2));
+  const r = db.prepare('INSERT INTO soumission_lignes (soumission_id,description,quantite,unite,prix_unitaire,total) VALUES (?,?,?,?,?,?)').run(req.params.id, description||'', quantite||1, unite||'unité', prix_unitaire||0, total);
+  res.json({ id: r.lastInsertRowid, total });
+});
+
+router.put('/:id/lignes/:lid', (req, res) => {
+  const { description, quantite, unite, prix_unitaire } = req.body;
+  const total = parseFloat(((quantite||1) * (prix_unitaire||0)).toFixed(2));
+  db.prepare('UPDATE soumission_lignes SET description=?,quantite=?,unite=?,prix_unitaire=?,total=? WHERE id=? AND soumission_id=?').run(description||'', quantite||1, unite||'unité', prix_unitaire||0, total, req.params.lid, req.params.id);
+  res.json({ success: true, total });
+});
+
+router.delete('/:id/lignes/:lid', (req, res) => {
+  db.prepare('DELETE FROM soumission_lignes WHERE id=? AND soumission_id=?').run(req.params.lid, req.params.id);
+  res.json({ success: true });
+});
+
 module.exports = router;
