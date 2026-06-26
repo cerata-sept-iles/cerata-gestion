@@ -18,19 +18,20 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
   const b = req.body;
-  const r = db.prepare(`INSERT INTO rapports_service (company_id,dossier_id,numero,date,technicien,equipement,travaux,heures,meteo,temperature,observations,statut,created_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+  const r = db.prepare(`INSERT INTO rapports_service (company_id,dossier_id,numero,date,technicien,equipement,numero_po,travaux,heures,meteo,temperature,observations,statut,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
     b.company_id, b.dossier_id||null, b.numero, b.date, b.technicien, b.equipement,
-    b.travaux, b.heures||0, b.meteo, b.temperature, b.observations, b.statut||'Brouillon', req.session.userId
+    b.numero_po||null, b.travaux, b.heures||0, b.meteo, b.temperature, b.observations,
+    b.statut||'Brouillon', req.session.userId
   );
   res.json({ id: r.lastInsertRowid });
 });
 
 router.put('/:id', (req, res) => {
   const b = req.body;
-  db.prepare(`UPDATE rapports_service SET dossier_id=?,numero=?,date=?,technicien=?,equipement=?,travaux=?,heures=?,meteo=?,temperature=?,observations=?,statut=? WHERE id=?`).run(
-    b.dossier_id||null, b.numero, b.date, b.technicien, b.equipement, b.travaux,
-    b.heures, b.meteo, b.temperature, b.observations, b.statut, req.params.id
+  db.prepare(`UPDATE rapports_service SET dossier_id=?,numero=?,date=?,technicien=?,equipement=?,numero_po=?,travaux=?,heures=?,meteo=?,temperature=?,observations=?,statut=? WHERE id=?`).run(
+    b.dossier_id||null, b.numero, b.date, b.technicien, b.equipement, b.numero_po||null,
+    b.travaux, b.heures, b.meteo, b.temperature, b.observations, b.statut, req.params.id
   );
   res.json({ success: true });
 });
