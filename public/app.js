@@ -143,7 +143,7 @@ function fillClientFromDoss(dossId, fieldId) {
 }
 async function fillPoFromDoss(dossId, fieldId) {
   if (!dossId) return;
-  try { const r = await api('/soumissions/po/' + dossId); if (r && r.numero_po) { const el = document.getElementById(fieldId); if (el) el.value = r.numero_po; } } catch(e) {}
+  try { const r = await api('/dossiers/' + dossId + '/po'); if (r && r.numero_po) { const el = document.getElementById(fieldId); if (el) el.value = r.numero_po; } } catch(e) {}
 }
 function fillDossClientAndPo(dossId) { fillClientFromDoss(dossId, 'rClient'); fillPoFromDoss(dossId, 'rNumPO'); }
 function toggleSoumPo() { const t = document.getElementById('sType'); const row = document.getElementById('sPORow'); if (row) row.style.display = (t && t.value === 'Commercial') ? 'block' : 'none'; }
