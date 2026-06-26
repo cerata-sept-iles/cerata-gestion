@@ -241,6 +241,13 @@ const migrations = [
   "ALTER TABLE bons_travail ADD COLUMN numero_po TEXT",
   "ALTER TABLE rapports_service ADD COLUMN numero_po TEXT",
   "ALTER TABLE factures ADD COLUMN numero_po TEXT",
+  // Signature électronique
+  "ALTER TABLE soumissions ADD COLUMN email_client TEXT",
+  "ALTER TABLE soumissions ADD COLUMN token TEXT",
+  "ALTER TABLE soumissions ADD COLUMN token_expires_at TEXT",
+  "ALTER TABLE soumissions ADD COLUMN signature_data TEXT",
+  "ALTER TABLE soumissions ADD COLUMN signed_at TEXT",
+  "ALTER TABLE soumissions ADD COLUMN signe_par TEXT",
 ];
 migrations.forEach(sql => { try { db.exec(sql); } catch(e) { /* column already exists */ } });
 
