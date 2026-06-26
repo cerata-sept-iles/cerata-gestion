@@ -2,6 +2,35 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database');
 const { requireAuth } = require('../middleware/auth');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
+const path = require('path');
+
+// Routes publiques (sans auth)
+router.get('/publique/:token', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/signer.html'));
+});
+
+router.get('/publique/:token/data', (req, res) => {
+  const s = db.prepare(`SELECT s.*, d.nom as dossier_nom, co.nom as company_nom FROM soumissions s LEFT JOIN dossiers d ON s.dossier_id = d.id LEFT JOIN companies co ON s.company_id = co.id WHERE s.token = ?`).get(req.params.token);
+  if (!s) return res.status(404).json({ error: 'Soumission introuvable ou lien expiré' });
+  if (s.token_expires_at && new Date(s.token_expires_at) < new Date()) return res.status(410).json({ error: 'Ce lien de signature a expiré' });
+  if (s.signed_at) return res.json({ ...s, deja_signe: true });
+  const { token, token_expires_at, ...safe } = s;
+  res.json(safe);
+});
+
+router.post('/publique/:token/signer', (req, res) => {
+  const { signature_data, signe_par } = req.body;
+  const s = db.prepare('SELECT id, token_expires_at, signed_at FROM soumissions WHERE token = ?').get(req.params.token);
+  if (!s) return res.status(404).json({ error: 'Soumission introuvable' });
+  if (s.token_expires_at && new Date(s.token_expires_at) < new Date()) return res.status(410).json({ error: 'Lien expiré' });
+  if (s.signed_at) return res.status(409).json({ error: 'Déjà signé' });
+  if (!signature_data) return res.status(400).json({ error: 'Signature manquante' });
+  const now = new Date().toISOString();
+  db.prepare(`UPDATE soumissions SET statut='Acceptée', signature_data=?, signed_at=?, signe_par=? WHERE id=?`).run(signature_data, now, signe_par||'', s.id);
+  res.json({ success: true, signed_at: now });
+});
 
 router.use(requireAuth);
 
