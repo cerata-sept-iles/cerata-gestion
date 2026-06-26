@@ -58,6 +58,28 @@ router.get('/stats', (req, res) => {
   res.json(stats);
 });
 
+router.post('/:id/envoyer', async (req, res) => {
+  const { email_client } = req.body;
+  if (!email_client) return res.status(400).json({ error: 'Email requis' });
+  const soum = db.prepare('SELECT s.*, co.nom as company_nom FROM soumissions s LEFT JOIN companies co ON s.company_id = co.id WHERE s.id = ?').get(req.params.id);
+  if (!soum) return res.status(404).json({ error: 'Soumission introuvable' });
+  const token = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 30*24*60*60*1000).toISOString();
+  db.prepare('UPDATE soumissions SET token=?, token_expires_at=?, email_client=? WHERE id=?').run(token, expires, email_client, req.params.id);
+  const baseUrl = process.env.BASE_URL || 'https://cerata-gestion.onrender.com';
+  const lien = baseUrl + '/api/soumissions/publique/' + token;
+  const montantFmt = soum.montant ? new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'}).format(soum.montant) : 'À déterminer';
+  const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS } });
+  const html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a1a2e;padding:24px;text-align:center"><h1 style="color:#fff;margin:0">' + (soum.company_nom||'Cerata') + '</h1><p style="color:#94a3b8;margin:6px 0 0">Soumission ' + (soum.numero||'#'+soum.id) + '</p></div><div style="padding:24px"><p>Bonjour ' + (soum.client||'') + ',</p><p>Veuillez trouver votre soumission <strong>' + soum.titre + '</strong> d'un montant de <strong>' + montantFmt + '</strong>.</p><div style="text-align:center;margin:28px 0"><a href="' + lien + '" style="background:#2563eb;color:#fff;padding:14px 30px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold">Voir et signer la soumission</a></div><p style="color:#888;font-size:13px">Lien valide 30 jours. Ce lien: <a href="' + lien + '">' + lien + '</a></p></div></div>';
+  try {
+    await transporter.sendMail({ from: '"' + (soum.company_nom||'Cerata') + '" <' + process.env.GMAIL_USER + '>', to: email_client, subject: 'Soumission ' + (soum.numero||'#'+soum.id) + ' — Signature requise', html });
+    res.json({ success: true, lien });
+  } catch(e) {
+    console.error('Email error:', e.message);
+    res.status(500).json({ error: e.message, lien });
+  }
+});
+
 router.post('/', (req, res) => {
   const b = req.body;
   const r = db.prepare(`INSERT INTO soumissions (company_id,dossier_id,numero,titre,client,montant,date_soumission,date_expiration,statut,representant,type_travaux,type,numero_po,description,notes,created_by)
