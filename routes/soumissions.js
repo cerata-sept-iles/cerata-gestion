@@ -16,6 +16,11 @@ router.get('/', (req, res) => {
   res.json(db.prepare(sql).all(...params));
 });
 
+router.get('/po/:dossier_id', (req, res) => {
+  const s = db.prepare(`SELECT numero_po FROM soumissions WHERE dossier_id=? AND type='Commercial' AND statut='Acceptée' AND numero_po IS NOT NULL AND numero_po != '' ORDER BY created_at DESC LIMIT 1`).get(req.params.dossier_id);
+  res.json({ numero_po: s ? s.numero_po : null });
+});
+
 router.get('/stats', (req, res) => {
   const { company_id } = req.query;
   const cond = company_id ? 'WHERE company_id = ?' : 'WHERE 1=1';
@@ -26,20 +31,21 @@ router.get('/stats', (req, res) => {
 
 router.post('/', (req, res) => {
   const b = req.body;
-  const r = db.prepare(`INSERT INTO soumissions (company_id,dossier_id,numero,titre,client,montant,date_soumission,date_expiration,statut,representant,type_travaux,description,notes,created_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+  const r = db.prepare(`INSERT INTO soumissions (company_id,dossier_id,numero,titre,client,montant,date_soumission,date_expiration,statut,representant,type_travaux,type,numero_po,description,notes,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
     b.company_id, b.dossier_id||null, b.numero||genNum(), b.titre, b.client, b.montant||0,
     b.date_soumission, b.date_expiration, b.statut||'En attente', b.representant,
-    b.type_travaux, b.description, b.notes, req.session.userId
+    b.type_travaux, b.type||'Résidentiel', b.numero_po||null, b.description, b.notes, req.session.userId
   );
   res.json({ id: r.lastInsertRowid });
 });
 
 router.put('/:id', (req, res) => {
   const b = req.body;
-  db.prepare(`UPDATE soumissions SET dossier_id=?,titre=?,client=?,montant=?,date_soumission=?,date_expiration=?,statut=?,representant=?,type_travaux=?,description=?,notes=? WHERE id=?`).run(
+  db.prepare(`UPDATE soumissions SET dossier_id=?,titre=?,client=?,montant=?,date_soumission=?,date_expiration=?,statut=?,representant=?,type_travaux=?,type=?,numero_po=?,description=?,notes=? WHERE id=?`).run(
     b.dossier_id||null, b.titre, b.client, b.montant, b.date_soumission, b.date_expiration,
-    b.statut, b.representant, b.type_travaux, b.description, b.notes, req.params.id
+    b.statut, b.representant, b.type_travaux, b.type||'Résidentiel', b.numero_po||null,
+    b.description, b.notes, req.params.id
   );
   res.json({ success: true });
 });
