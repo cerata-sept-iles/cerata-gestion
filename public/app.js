@@ -3,6 +3,40 @@
 // ============================================================
 let user = null, companies = [], currentCo = null, currentScreen = 'dashboard';
 let soumView = 'list';
+let _soumLignes = []; // lignes en cours d'édition
+
+// ===== MODÈLES DE SOUMISSION =====
+const _SOUM_TEMPLATES = [
+  {
+    nom: '🏠 Rénovation résidentielle',
+    tps: true, tvq: true, forfaitaire: false,
+    lignes: [
+      { description: 'Main d\'œuvre — démolition', quantite: 1, unite: 'h', prix_unitaire: 0, total: 0 },
+      { description: 'Main d\'œuvre — installation', quantite: 1, unite: 'h', prix_unitaire: 0, total: 0 },
+      { description: 'Fournitures et matériaux', quantite: 1, unite: 'forfait', prix_unitaire: 0, total: 0 },
+      { description: 'Transport et livraison', quantite: 1, unite: 'forfait', prix_unitaire: 0, total: 0 },
+    ]
+  },
+  {
+    nom: '🔨 Construction extérieure',
+    tps: true, tvq: true, forfaitaire: true,
+    lignes: [
+      { description: 'Préparation du terrain / excavation', quantite: 1, unite: 'h', prix_unitaire: 0, total: 0 },
+      { description: 'Matériaux de construction', quantite: 1, unite: 'forfait', prix_unitaire: 0, total: 0 },
+      { description: 'Main d\'œuvre spécialisée', quantite: 1, unite: 'h', prix_unitaire: 0, total: 0 },
+      { description: 'Finition et nettoyage', quantite: 1, unite: 'forfait', prix_unitaire: 0, total: 0 },
+    ]
+  },
+  {
+    nom: '🔧 Entretien et réparations',
+    tps: true, tvq: true, forfaitaire: false,
+    lignes: [
+      { description: 'Déplacement / inspection', quantite: 1, unite: 'visite', prix_unitaire: 0, total: 0 },
+      { description: 'Main d\'œuvre — réparation', quantite: 1, unite: 'h', prix_unitaire: 0, total: 0 },
+      { description: 'Pièces et matériaux', quantite: 1, unite: 'forfait', prix_unitaire: 0, total: 0 },
+    ]
+  }
+];
 
 // ===== INIT =====
 async function init() {
@@ -143,10 +177,20 @@ function fillClientFromDoss(dossId, fieldId) {
 }
 async function fillPoFromDoss(dossId, fieldId) {
   if (!dossId) return;
-  try { const r = await api('/dossiers/' + dossId + '/po'); if (r && r.numero_po) { const el = document.getElementById(fieldId); if (el) el.value = r.numero_po; } } catch(e) {}
+  try {
+    const r = await api('/dossiers/' + dossId + '/po');
+    if (r && r.numero_po) { const el = document.getElementById(fieldId); if (el) el.value = r.numero_po; }
+  } catch(e) {}
 }
-function fillDossClientAndPo(dossId) { fillClientFromDoss(dossId, 'rClient'); fillPoFromDoss(dossId, 'rNumPO'); }
-function toggleSoumPo() { const t = document.getElementById('sType'); const row = document.getElementById('sPORow'); if (row) row.style.display = (t && t.value === 'Commercial') ? 'block' : 'none'; }
+function fillDossClientAndPo(dossId) {
+  fillClientFromDoss(dossId, 'rClient');
+  fillPoFromDoss(dossId, 'rNumPO');
+}
+function toggleSoumPo() {
+  const t = document.getElementById('sType');
+  const row = document.getElementById('sPORow');
+  if (row) row.style.display = (t && t.value === 'Commercial') ? 'block' : 'none';
+}
 
 // ===== DRAWER =====
 function openDrawer(title, bodyHTML, footerHTML) {
@@ -170,7 +214,7 @@ function toast(msg, type='ok') {
 }
 
 // ===== HELPERS =====
-function fmt(n) { return n ? '$' + Number(n).toLocaleString('fr-CA', {minimumFractionDigits:2, maximumFractionDigits:3}) : '—'; }
+function fmt(n) { return n ? '$' + Number(n).toLocaleString('fr-CA', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'; }
 function fd(d) { if(!d) return '—'; const p=d.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; }
 function today() { return new Date().toISOString().slice(0,10); }
 function badge(s) {
@@ -294,7 +338,7 @@ async function renderDossiers() {
             ${d.categorie?`<span class="badge b-blue">${d.categorie}</span>`:''}
             ${d.budget?`<span class="badge b-accent">💰 ${fmt(d.budget)}</span>`:''}
             ${d.representant?`<span class="badge b-gray">👤 ${d.representant}</span>`:''}
-            ${d.numero?`<span class="badge b-gray">#${d.numero}|/span>`:''}
+            ${d.numero?`<span class="badge b-gray">#${d.numero}</span>`:''}
           </div>
         </div>`).join('') : `<div class="empty-state"><div class="es-icon">🏗️</div><h3>Aucun dossier</h3><p>Cliquez sur "+ Nouveau dossier" pour commencer.</p></div>`}
     </div>`;
@@ -445,7 +489,7 @@ async function loadDetailTab(tab, id, d) {
     c.innerHTML = `<div class="fg"><textarea class="ftextarea" id="newNote" placeholder="Ajouter une note..." rows="3"></textarea>
       <button class="btn-prim" style="margin-top:8px" onclick="addNote(${id})">Ajouter</button></div>
       <div style="margin-top:16px">${notes.map(n=>`<div style="background:var(--gray2);border-radius:10px;padding:12px;margin-bottom:10px">
-        <div style="font-size:13px">${n.content}</div>
+        <div style="font-size:13px">${n.contenu}</div>
         <div style="font-size:11px;color:var(--gray);margin-top:6px">${n.auteur} — ${new Date(n.created_at).toLocaleDateString('fr-CA')}</div>
       </div>`).join('') || '<p style="color:var(--gray)">Aucune note</p>'}</div>`;
   } else if (tab === 'Checklist') {
@@ -553,65 +597,266 @@ function renderSoumContent(all) {
 async function quickStatut(id, statut) { await api('/soumissions/'+id+'/statut', {method:'PUT',body:JSON.stringify({statut})}); toast('Statut: '+statut+' ✓'); renderSoumissions(); }
 
 function openSoumForm(dossId=null, existing={}) {
-  api('/dossiers?company_id='+currentCo).then(doss => {
+  _soumLignes = [];
+  const loadAndOpen = (doss, lignes) => {
+    _soumLignes = lignes.map(l => ({...l}));
     _formDoss = doss;
+    const tpsChecked = existing.tps_incluse !== 0 ? 'checked' : '';
+    const tvqChecked = existing.tvq_incluse !== 0 ? 'checked' : '';
+    const forfChecked = existing.forfaitaire ? 'checked' : '';
     const html = `
+      <div class="fg" style="margin-bottom:16px;padding:12px;background:var(--bg2);border-radius:10px">
+        <label class="flabel" style="margin-bottom:6px">📋 Charger un modèle</label>
+        <select class="fselect" id="sTmpl" onchange="loadSoumTemplate(this.value)">
+          <option value="">— Choisir un modèle (optionnel) —</option>
+          ${_SOUM_TEMPLATES.map((t,i)=>`<option value="${i}">${t.nom}</option>`).join('')}
+        </select>
+      </div>
       <div class="fg"><label class="flabel">Titre *</label><input class="finput" id="sTitre" value="${existing.titre||''}" placeholder="Ex: Pompage béton fondation - 45m³"></div>
+      <div class="fg"><label class="flabel">Dossier lié</label><select class="fselect" id="sDoss" onchange="fillClientFromDoss(this.value,'sClient')"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(existing.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
       <div class="fg"><label class="flabel">Client *</label><input class="finput" id="sClient" value="${existing.client||''}"></div>
       <div class="fg"><label class="flabel">Type de soumission</label><select class="fselect" id="sType" onchange="toggleSoumPo()"><option value="Résidentiel" ${(existing.type||'Résidentiel')==='Résidentiel'?'selected':''}>Résidentiel</option><option value="Commercial" ${existing.type==='Commercial'?'selected':''}>Commercial</option></select></div>
       <div class="fg" id="sPORow" style="display:${existing.type==='Commercial'?'block':'none'}"><label class="flabel">N° PO (client)</label><input class="finput" id="sNumPO" value="${existing.numero_po||''}" placeholder="Ex: PO-2024-001"></div>
-      <div class="fg"><label class="flabel">Dossier lié</label><select class="fselect" id="sDoss" onchange="fillClientFromDoss(this.value,'sClient')"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(existing.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
       <div class="frow">
-        <div class="fg"><label class="flabel">Montant ($)</label><input class="finput" id="sMontant" type="number" value="${existing.montant||''}"></div>
         <div class="fg"><label class="flabel">Date soumission</label><input class="finput" id="sDate" type="date" value="${existing.date_soumission||today()}"></div>
+        <div class="fg"><label class="flabel">Date expiration</label><input class="finput" id="sExp" type="date" value="${existing.date_expiration||''}"></div>
       </div>
-      <div class="fg"><label class="flabel">Date expiration</label><input class="finput" id="sExp" type="date" value="${existing.date_expiration||''}"></div>
       <div class="fg"><label class="flabel">Représentant</label><input class="finput" id="sRep" value="${existing.representant||''}"></div>
+
+      <div class="fsep"></div>
+      <div class="fsec" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Lignes de soumission</span>
+        <button class="btn-sec" style="padding:4px 12px;font-size:12px" onclick="addSoumLigne()">+ Ajouter</button>
+      </div>
+      <div id="soumLignesContainer"></div>
+
+      <div style="background:var(--bg2);border-radius:10px;padding:14px;margin-top:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:13px;color:var(--text2)">Sous-total</span>
+          <span style="font-weight:600" id="soumSousTotal">0,00 $</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <label style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="sTPS" ${tpsChecked} onchange="calcSoumTotals()"> TPS (5%)
+          </label>
+          <span id="soumTPS" style="font-size:13px">0,00 $</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <label style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="sTVQ" ${tvqChecked} onchange="calcSoumTotals()"> TVQ (9,975%)
+          </label>
+          <span id="soumTVQ" style="font-size:13px">0,00 $</span>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:700">Total calculé</span>
+          <span style="font-size:18px;font-weight:900;color:var(--blue)" id="soumTotalCalc">0,00 $</span>
+        </div>
+        <div style="margin-top:12px">
+          <label class="flabel" style="display:flex;align-items:center;justify-content:space-between">
+            Prix final (modifiable)
+            <button class="filter-btn" style="font-size:11px;padding:2px 8px" onclick="soumSyncMontant()">⟳ Utiliser le calculé</button>
+          </label>
+          <input class="finput" id="sMontant" type="number" step="0.01" value="${existing.montant||''}" placeholder="Montant final (peut différer du calculé)">
+        </div>
+      </div>
+
+      <div style="margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:10px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input type="checkbox" id="sForfaitaire" ${forfChecked} style="width:16px;height:16px">
+          <div>
+            <div style="font-weight:600;font-size:14px">Prix forfaitaire</div>
+            <div style="font-size:12px;color:var(--text2)">Le client ne voit que le total — aucun détail de lignes</div>
+          </div>
+        </label>
+      </div>
+
       <div class="fsep"></div><div class="fsec">Statut</div>
       <div class="status-pills" id="soumPills">${['En attente','Acceptée','Refusée','Révision'].map(s=>`<button class="sp sp-${s==='En attente'?'att':s==='Acceptée'?'acc':s==='Refusée'?'ref':'rev'} ${(existing.statut||'En attente')===s?'sel':''}" onclick="pickSoumStatut(this,'${s}')">${s}</button>`).join('')}</div>
       <input type="hidden" id="sStatut" value="${existing.statut||'En attente'}">
-      <div class="fg" style="margin-top:12px"><label class="flabel">Notes</label><textarea class="ftextarea" id="sNotes">${existing.notes||''}</textarea></div>`;
+      <div class="fg" style="margin-top:12px"><label class="flabel">Notes</label><textarea class="ftextarea" id="sNotes">${existing.notes||''}</textarea></div>
+      ${existing.signed_at ? `<div style="margin-top:16px;background:#dcfce7;border:1px solid #86efac;border-radius:10px;padding:14px"><div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:8px">✅ Soumission signée électroniquement</div><div style="font-size:12px;color:#166534">Signée par: ${existing.signe_par||'—'} • ${new Date(existing.signed_at).toLocaleDateString('fr-CA',{year:'numeric',month:'long',day:'numeric'})}</div>${existing.signature_data?`<img src="${existing.signature_data}" style="max-width:220px;max-height:80px;margin-top:10px;border-radius:6px;background:#fff;padding:4px;border:1px solid #bbf7d0" alt="Signature">`:''}` : ''}`;
     openDrawer(existing.id ? 'Modifier soumission' : 'Nouvelle soumission', html, `
       <button class="btn-prim" onclick="saveSoum(${existing.id||''})">Enregistrer</button>
-      ${existing.id?`<button class="btn-sec" style="background:#dbeafe;color:#1d4ed8" onclick="envoyerSoum(${existing.id},'${existing.client||''}')">Envoyer par courriel</button>`:''}
+      ${existing.id?`<button class="btn-sec" style="background:#dbeafe;color:#1d4ed8" onclick="envoyerSoum(${existing.id},'${existing.client||''}')">📧 Envoyer par courriel</button>`:''}
       ${existing.id?`<button class="btn-danger" onclick="delSoum(${existing.id})">Supprimer</button>`:''}
       <button class="btn-sec" onclick="closeDrawer({target:document.getElementById('drawerOverlay')})">Annuler</button>`);
-  });
+    setTimeout(() => renderSoumLignes(), 60);
+  };
+  Promise.all([
+    api('/dossiers?company_id='+currentCo),
+    existing.id ? api('/soumissions/'+existing.id+'/lignes') : Promise.resolve([])
+  ]).then(([doss, lignes]) => loadAndOpen(doss, lignes));
 }
 
 function pickSoumStatut(btn, val) { document.querySelectorAll('#soumPills .sp').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); document.getElementById('sStatut').value = val; }
 
+function loadSoumTemplate(idx) {
+  if (idx === '') return;
+  const t = _SOUM_TEMPLATES[parseInt(idx)];
+  if (!t) return;
+  _soumLignes = t.lignes.map(l => ({...l}));
+  const tpsEl = document.getElementById('sTPS');
+  const tvqEl = document.getElementById('sTVQ');
+  const forfEl = document.getElementById('sForfaitaire');
+  if (tpsEl) tpsEl.checked = t.tps;
+  if (tvqEl) tvqEl.checked = t.tvq;
+  if (forfEl) forfEl.checked = t.forfaitaire;
+  renderSoumLignes();
+  calcSoumTotals();
+  toast('Modèle « ' + t.nom + ' » chargé ✓');
+}
+
 async function saveSoum(id) {
-  const data = { company_id: currentCo, titre: fv('sTitre'), client: fv('sClient'), dossier_id: fv('sDoss')||null, montant: fv('sMontant'), date_soumission: fv('sDate'), date_expiration: fv('sExp'), representant: fv('sRep'), statut: fv('sStatut')||'En attente', type: fv('sType')||'Résidentiel', numero_po: fv('sNumPO')||null, notes: fv('sNotes') };
+  const tpsEl = document.getElementById('sTPS');
+  const tvqEl = document.getElementById('sTVQ');
+  const forfEl = document.getElementById('sForfaitaire');
+  const data = {
+    company_id: currentCo, titre: fv('sTitre'), client: fv('sClient'),
+    dossier_id: fv('sDoss')||null, montant: fv('sMontant')||0,
+    date_soumission: fv('sDate'), date_expiration: fv('sExp'),
+    representant: fv('sRep'), statut: fv('sStatut')||'En attente',
+    type: fv('sType')||'Résidentiel', numero_po: fv('sNumPO')||null,
+    notes: fv('sNotes'),
+    tps_incluse: tpsEl && tpsEl.checked ? 1 : 0,
+    tvq_incluse: tvqEl && tvqEl.checked ? 1 : 0,
+    forfaitaire: forfEl && forfEl.checked ? 1 : 0
+  };
   if (!data.titre || !data.client) { toast('Titre et client requis'); return; }
   try {
-    if (id) await api('/soumissions/'+id, {method:'PUT',body:JSON.stringify(data)});
-    else await api('/soumissions', {method:'POST',body:JSON.stringify(data)});
-    closeDrawer({target:document.getElementById('drawerOverlay')}); toast('Soumission enregistrée ✓'); renderSoumissions();
-  } catch(e) { toast(e.message); }
+    let soumId = id;
+    if (id) {
+      await api('/soumissions/'+id, {method:'PUT',body:JSON.stringify(data)});
+    } else {
+      const r = await api('/soumissions', {method:'POST',body:JSON.stringify(data)});
+      soumId = r.id;
+    }
+    // Sync lignes: delete all then re-insert
+    if (soumId && _soumLignes.length > 0) {
+      const existing = await api('/soumissions/'+soumId+'/lignes');
+      for (const l of existing) {
+        await api('/soumissions/'+soumId+'/lignes/'+l.id, {method:'DELETE'});
+      }
+      for (const l of _soumLignes) {
+        if (l.description || l.prix_unitaire) {
+          await api('/soumissions/'+soumId+'/lignes', {method:'POST', body:JSON.stringify({
+            description: l.description||'', quantite: l.quantite||1,
+            unite: l.unite||'unité', prix_unitaire: l.prix_unitaire||0
+          })});
+        }
+      }
+    } else if (soumId && _soumLignes.length === 0 && id) {
+      // Clear all lignes if emptied
+      const existing = await api('/soumissions/'+soumId+'/lignes');
+      for (const l of existing) {
+        await api('/soumissions/'+soumId+'/lignes/'+l.id, {method:'DELETE'});
+      }
+    }
+    closeDrawer({target:document.getElementById('drawerOverlay')});
+    toast('Soumission enregistrée ✓');
+    renderSoumissions();
+  } catch(e) { toast(e.message||'Erreur'); }
 }
 async function delSoum(id) { if(!confirm('Supprimer?'))return; await api('/soumissions/'+id,{method:'DELETE'}); closeDrawer({target:document.getElementById('drawerOverlay')}); toast('Supprimée'); renderSoumissions(); }
 
 async function envoyerSoum(id, clientNom) {
-  const email = prompt("Entrez l'adresse courriel du client (" + clientNom + ") :", "");
+  const email = prompt(`Entrez l'adresse courriel du client (${clientNom}) :`, '');
   if (!email) return;
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast("Adresse courriel invalide"); return; }
-  toast("Envoi en cours...");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Adresse courriel invalide'); return; }
+  toast('Envoi en cours…');
   try {
-    const r = await api("/soumissions/"+id+"/envoyer", {method:"POST", body: JSON.stringify({email_client: email})});
-    closeDrawer({target:document.getElementById("drawerOverlay")});
-    toast("Courriel envoye a " + email);
+    const r = await api('/soumissions/'+id+'/envoyer', {method:'POST', body: JSON.stringify({email_client: email})});
+    closeDrawer({target:document.getElementById('drawerOverlay')});
+    toast('📧 Courriel envoyé à ' + email + ' ✓');
     renderSoumissions();
   } catch(e) {
-    if (e && e.lien) {
-      if (confirm("Erreur email. Copier le lien ?\n" + e.lien)) {
-        if (navigator.clipboard) navigator.clipboard.writeText(e.lien);
-        toast("Lien copie");
-      }
-    } else { toast("Erreur: " + (e && e.message ? e.message : e)); }
+    if (e.lien) {
+      const copy = confirm('Erreur d\'envoi courriel. Voulez-vous copier le lien de signature manuellement ?\n\n' + e.lien);
+      if (copy) { navigator.clipboard?.writeText(e.lien); toast('Lien copié ✓'); }
+    } else {
+      toast('Erreur: ' + e.message);
+    }
   }
 }
+
 async function openSoumDetail(id) { const s = await api('/soumissions/'+id); openSoumForm(null, s); }
+
+// ===== LIGNES DE SOUMISSION =====
+function addSoumLigne() {
+  _soumLignes.push({ description: '', quantite: 1, unite: 'unité', prix_unitaire: 0, total: 0 });
+  renderSoumLignes();
+}
+
+function removeSoumLigne(idx) {
+  _soumLignes.splice(idx, 1);
+  renderSoumLignes();
+}
+
+function calcSoumLigne(idx) {
+  const l = _soumLignes[idx];
+  l.total = Math.round((l.quantite||0) * (l.prix_unitaire||0) * 100) / 100;
+  const el = document.getElementById('soumLigneTotal'+idx);
+  if (el) el.textContent = fmt(l.total);
+  calcSoumTotals();
+}
+
+function calcSoumTotals() {
+  const sousTotal = _soumLignes.reduce((s,l) => s + (l.total||0), 0);
+  const tps = document.getElementById('sTPS')?.checked ? Math.round(sousTotal * 0.05 * 100) / 100 : 0;
+  const tvq = document.getElementById('sTVQ')?.checked ? Math.round(sousTotal * 0.09975 * 100) / 100 : 0;
+  const total = Math.round((sousTotal + tps + tvq) * 100) / 100;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = fmt(v); };
+  set('soumSousTotal', sousTotal);
+  set('soumTPS', tps);
+  set('soumTVQ', tvq);
+  set('soumTotalCalc', total);
+}
+
+function soumSyncMontant() {
+  const el = document.getElementById('soumTotalCalc');
+  const montantEl = document.getElementById('sMontant');
+  if (!el || !montantEl) return;
+  // Parse formatted value back to number
+  const raw = el.textContent.replace(/[^0-9,.-]/g,'').replace(',','.');
+  montantEl.value = parseFloat(raw) || 0;
+}
+
+function renderSoumLignes() {
+  const container = document.getElementById('soumLignesContainer');
+  if (!container) return;
+  if (_soumLignes.length === 0) {
+    container.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;border:1px dashed var(--border);border-radius:8px;margin:8px 0">Aucune ligne — cliquez sur "+ Ajouter"</div>';
+    calcSoumTotals();
+    return;
+  }
+  const units = ['heure','h','jour','unité','pied','pi²','pi³','m','m²','m³','forfait','voyage','camion','charge','load'];
+  let rows = _soumLignes.map((l,i) => `
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:4px 2px"><input class="finput" style="margin:0;min-width:0" placeholder="Description" value="${(l.description||'').replace(/"/g,'&quot;')}" oninput="_soumLignes[${i}].description=this.value"></td>
+      <td style="padding:4px 2px;width:70px"><input class="finput" style="margin:0;text-align:right;min-width:0" type="number" min="0" step="any" value="${l.quantite||1}" oninput="_soumLignes[${i}].quantite=parseFloat(this.value)||0;calcSoumLigne(${i})"></td>
+      <td style="padding:4px 2px;width:90px">
+        <input class="finput" style="margin:0;min-width:0" list="unitesList" value="${l.unite||'unité'}" oninput="_soumLignes[${i}].unite=this.value">
+      </td>
+      <td style="padding:4px 2px;width:100px"><input class="finput" style="margin:0;text-align:right;min-width:0" type="number" min="0" step="any" value="${l.prix_unitaire||0}" oninput="_soumLignes[${i}].prix_unitaire=parseFloat(this.value)||0;calcSoumLigne(${i})"></td>
+      <td style="padding:4px 2px;width:90px;text-align:right;font-weight:600;white-space:nowrap" id="soumLigneTotal${i}">${fmt(l.total||0)}</td>
+      <td style="padding:4px 2px;width:28px;text-align:center"><button onclick="removeSoumLigne(${i})" style="background:none;border:none;color:var(--red-dk);cursor:pointer;font-size:18px;line-height:1;padding:2px">×</button></td>
+    </tr>`).join('');
+  container.innerHTML = `
+    <datalist id="unitesList">${units.map(u=>`<option value="${u}">`).join('')}</datalist>
+    <div style="overflow-x:auto;margin:8px 0">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:var(--bg2)">
+          <th style="padding:6px 4px;text-align:left;font-weight:600;color:var(--text2)">Description</th>
+          <th style="padding:6px 4px;text-align:right;font-weight:600;color:var(--text2);white-space:nowrap">Qté</th>
+          <th style="padding:6px 4px;text-align:left;font-weight:600;color:var(--text2)">Unité</th>
+          <th style="padding:6px 4px;text-align:right;font-weight:600;color:var(--text2);white-space:nowrap">Prix unit.</th>
+          <th style="padding:6px 4px;text-align:right;font-weight:600;color:var(--text2)">Total</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  calcSoumTotals();
+}
 
 // ===== BONS DE TRAVAIL =====
 let bonFilt = 'Tous';
@@ -782,8 +1027,9 @@ function openFacForm(dossId=null, f={lignes:[]}) {
         <div class="fg"><label class="flabel">Date échéance</label><input class="finput" id="fEch" type="date" value="${f.date_echeance||''}"></div>
         <div class="fg"><label class="flabel">Statut</label><select class="fselect" id="fStatut">${['Brouillon','Envoyée','Payée','En retard'].map(s=>`<option ${f.statut===s?'selected':''}>${s}</option>`).join('')}</select></div>
       </div>
-      <div class="fg"><label class="flabel">Client</label><input class="finput" id="fClient" value="${f.client||''}"></div>
       <div class="fg"><label class="flabel">Dossier</label><select class="fselect" id="fDoss" onchange="fillClientFromDoss(this.value,'fClient');fillPoFromDoss(this.value,'fNumPO')"><option value="">— Aucun —</option>${doss.map(d=>`<option value="${d.id}" ${(f.dossier_id||dossId)==d.id?'selected':''}>${d.nom}</option>`).join('')}</select></div>
+      <div class="fg"><label class="flabel">Client</label><input class="finput" id="fClient" value="${f.client||''}"></div>
+      <div class="fg"><label class="flabel">N° PO</label><input class="finput" id="fNumPO" value="${f.numero_po||''}" placeholder="Laisser vide si aucun"></div>
       <div class="fsep"></div><div class="fsec">Lignes de facturation</div>
       <div id="facLignesDiv"></div>
       <button class="btn-sec" onclick="addFacLigne()" style="margin-bottom:12px">+ Ajouter une ligne</button>
