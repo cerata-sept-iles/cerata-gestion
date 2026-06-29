@@ -17,6 +17,10 @@ router.get('/publique/:token/data', (req, res) => {
   if (s.token_expires_at && new Date(s.token_expires_at) < new Date()) return res.status(410).json({ error: 'Ce lien de signature a expiré' });
   if (s.signed_at) return res.json({ ...s, deja_signe: true });
   const { token, token_expires_at, ...safe } = s;
+  // Inclure les lignes si mode détaillé (non forfaitaire)
+  if (!safe.forfaitaire) {
+    safe.lignes = db.prepare('SELECT * FROM soumission_lignes WHERE soumission_id = ? ORDER BY id').all(safe.id);
+  }
   res.json(safe);
 });
 
@@ -70,7 +74,7 @@ router.post('/:id/envoyer', async (req, res) => {
   const lien = baseUrl + '/api/soumissions/publique/' + token;
   const montantFmt = soum.montant ? new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'}).format(soum.montant) : 'À déterminer';
   const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS } });
-  const html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a1a2e;padding:24px;text-align:center"><h1 style="color:#fff;margin:0">' + (soum.company_nom||'Cerata') + '</h1><p style="color:#94a3b8;margin:6px 0 0">Soumission ' + (soum.numero||'#'+soum.id) + '</p></div><div style="padding:24px"><p>Bonjour ' + (soum.client||'') + ',</p><p>Veuillez trouver votre soumission <strong>' + soum.titre + '</strong> d'un montant de <strong>' + montantFmt + '</strong>.</p><div style="text-align:center;margin:28px 0"><a href="' + lien + '" style="background:#2563eb;color:#fff;padding:14px 30px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold">Voir et signer la soumission</a></div><p style="color:#888;font-size:13px">Lien valide 30 jours. Ce lien: <a href="' + lien + '">' + lien + '</a></p></div></div>';
+  const html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a1a2e;padding:24px;text-align:center"><h1 style="color:#fff;margin:0">' + (soum.company_nom||'Cerata') + '</h1><p style="color:#94a3b8;margin:6px 0 0">Soumission ' + (soum.numero||'#'+soum.id) + '</p></div><div style="padding:24px"><p>Bonjour ' + (soum.client||'') + ',</p><p>Veuillez trouver votre soumission <strong>' + soum.titre + '</strong> d\'un montant de <strong>' + montantFmt + '</strong>.</p><div style="text-align:center;margin:28px 0"><a href="' + lien + '" style="background:#2563eb;color:#fff;padding:14px 30px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold">Voir et signer la soumission</a></div><p style="color:#888;font-size:13px">Lien valide 30 jours. Ce lien: <a href="' + lien + '">' + lien + '</a></p></div></div>';
   try {
     await transporter.sendMail({ from: '"' + (soum.company_nom||'Cerata') + '" <' + process.env.GMAIL_USER + '>', to: email_client, subject: 'Soumission ' + (soum.numero||'#'+soum.id) + ' — Signature requise', html });
     res.json({ success: true, lien });
