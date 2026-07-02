@@ -4,6 +4,9 @@
 let user = null, companies = [], currentCo = null, currentScreen = 'dashboard';
 let soumView = 'list';
 let _soumLignes = []; // lignes en cours d'édition
+let dossFiltSpec = null; // null = toutes spécialités
+let soumFiltSpec = null;
+let _specialites = []; // cache des spécialités chargées
 
 // ===== MODÈLES DE SOUMISSION =====
 const _SOUM_TEMPLATES = [
@@ -79,6 +82,7 @@ function renderLayout() {
             ${navItem('contacts','Contacts','M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z')}
             ${navItem('temps','Feuilles de temps','M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z')}
             ${navItem('catalogue','Catalogue','M14 6l-1-2H5v17h2v-7h5l1 2h7V6h-6zm4 8h-4l-1-2H7V6h5l1 2h5v6z')}
+            ${navItem('specialites','Spécialités','M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z')}
             ${user?.role==='admin' ? navItem('users','Utilisateurs','M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z') : ''}
           </div>
         </nav>
@@ -140,6 +144,7 @@ const SCREEN_CONFIG = {
   temps: { title: 'Feuilles de temps', showNew: true, newLabel: '+ Ajouter des heures' },
   users: { title: 'Utilisateurs', showNew: true, newLabel: '+ Nouvel utilisateur' },
   catalogue: { title: 'Catalogue', showNew: true, newLabel: '+ Ajouter au catalogue' },
+  specialites: { title: 'Spécialités', showNew: true, newLabel: '+ Nouvelle spécialité' },
 };
 
 function navigate(screen) {
@@ -151,12 +156,12 @@ function navigate(screen) {
   document.getElementById('topbarTitle').textContent = cfg.title || screen;
   const btn = document.getElementById('btnNew');
   if (btn) { btn.style.display = cfg.showNew ? 'flex' : 'none'; document.getElementById('btnNewLabel').textContent = cfg.newLabel || 'Nouveau'; }
-  const renders = { dashboard: renderDashboard, dossiers: renderDossiers, soumissions: renderSoumissions, bons: renderBons, rapports: renderRapports, factures: renderFactures, contacts: renderContacts, temps: renderTemps, users: renderUsers, catalogue: renderCatalogue };
+  const renders = { dashboard: renderDashboard, dossiers: renderDossiers, soumissions: renderSoumissions, bons: renderBons, rapports: renderRapports, factures: renderFactures, contacts: renderContacts, temps: renderTemps, users: renderUsers, catalogue: renderCatalogue, specialites: renderSpecialites };
   if (renders[screen]) renders[screen]();
 }
 
 function openNew() {
-  const forms = { dossiers: openDossierForm, soumissions: openSoumForm, bons: openBonForm, rapports: openRapForm, factures: openFacForm, contacts: openContForm, temps: openTempsForm, users: openUserForm, catalogue: openCatalogueItemForm };
+  const forms = { dossiers: openDossierForm, soumissions: openSoumForm, bons: openBonForm, rapports: openRapForm, factures: openFacForm, contacts: openContForm, temps: openTempsForm, users: openUserForm, catalogue: openCatalogueItemForm, specialites: openSpecialiteForm };
   if (forms[currentScreen]) forms[currentScreen]();
 }
 
@@ -312,16 +317,26 @@ async function renderDashboard() {
 let dossFilt = 'Tous';
 async function renderDossiers() {
   const content = document.getElementById('mainContent');
-  const params = `company_id=${currentCo}${dossFilt!=='Tous'?'&statut='+dossFilt:''}`;
-  const doss = await api('/dossiers?'+params);
+  const [allDoss, specs] = await Promise.all([
+    api('/dossiers?company_id='+currentCo),
+    api('/specialites?company_id='+currentCo)
+  ]);
+  _specialites = specs;
+  // Filter client-side by statut + spécialité
+  let doss = dossFilt === 'Tous' ? allDoss : allDoss.filter(d => d.statut === dossFilt);
+  if (dossFiltSpec !== null) doss = doss.filter(d => d.specialite_id === dossFiltSpec);
   const statuts = ['Tous','En cours','Planifié','En attente','Terminé','Annulé'];
   content.innerHTML = `
     <div class="filter-bar">
       ${statuts.map(s=>`<button class="filter-btn ${s===dossFilt?'active':''}" onclick="dossFilt='${s}';renderDossiers()">${s}</button>`).join('')}
       <span style="color:var(--gray);font-size:12px;margin-left:8px">${doss.length} dossier${doss.length!==1?'s':''}</span>
     </div>
+    ${specs.length ? `<div class="filter-bar" style="margin-top:6px">
+      <button class="filter-btn ${dossFiltSpec===null?'active':''}" onclick="dossFiltSpec=null;renderDossiers()">Toutes spécialités</button>
+      ${specs.map(sp=>{const c=sp.couleur||'#3b82f6';const act=dossFiltSpec===sp.id;return `<button class="filter-btn" style="${act?`background:${c};color:#fff;border-color:${c}`:`background:${c}18;color:${c};border-color:${c}55`}" onclick="dossFiltSpec=${sp.id};renderDossiers()">${sp.nom}</button>`;}).join('')}
+    </div>` : ''}
     <div class="cards-list">
-      ${doss.length ? doss.map(d => `
+      ${doss.length ? doss.map(d => { const sp = _specialites.find(s=>s.id===d.specialite_id); return `
         <div class="card ${cardColor(d.statut)}" onclick="openDossierDetail(${d.id})">
           <div class="card-header">
             <div style="flex:1">
@@ -336,17 +351,19 @@ async function renderDossiers() {
           </div>
           ${d.avancement?`<div class="prog-bar" style="margin-top:10px"><div class="prog-fill" style="width:${d.avancement}%"></div></div>`:''}
           <div class="card-meta">
+            ${sp?`<span style="background:${sp.couleur||'#3b82f6'}18;color:${sp.couleur||'#3b82f6'};border:1px solid ${sp.couleur||'#3b82f6'}55;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">⬤ ${sp.nom}</span>`:''}
             ${d.type_travaux?`<span class="badge b-navy">${d.type_travaux}</span>`:''}
             ${d.categorie?`<span class="badge b-blue">${d.categorie}</span>`:''}
             ${d.budget?`<span class="badge b-accent">💰 ${fmt(d.budget)}</span>`:''}
             ${d.representant?`<span class="badge b-gray">👤 ${d.representant}</span>`:''}
             ${d.numero?`<span class="badge b-gray">#${d.numero}</span>`:''}
           </div>
-        </div>`).join('') : `<div class="empty-state"><div class="es-icon">🏗️</div><h3>Aucun dossier</h3><p>Cliquez sur "+ Nouveau dossier" pour commencer.</p></div>`}
+        </div>`;}).join('') : `<div class="empty-state"><div class="es-icon">🏗️</div><h3>Aucun dossier</h3><p>Cliquez sur "+ Nouveau dossier" pour commencer.</p></div>`}
     </div>`;
 }
 
 function dossierFormHTML(d={}) {
+  const specOpts = _specialites.map(s=>`<option value="${s.id}" ${d.specialite_id==s.id?'selected':''}>${s.nom}</option>`).join('');
   return `
     <div class="fsec">Informations générales</div>
     <div class="fg"><label class="flabel">Nom du dossier *</label><input class="finput" id="fNom" value="${d.nom||''}" placeholder="Ex: Résidentiel - Martin - dalle béton"></div>
@@ -355,7 +372,10 @@ function dossierFormHTML(d={}) {
       <div class="fg"><label class="flabel">Statut</label><select class="fselect" id="fStatut">${['En cours','Planifié','En attente','Terminé','Annulé'].map(s=>`<option ${d.statut===s?'selected':''}>${s}</option>`).join('')}</select></div>
     </div>
     <div class="frow">
+      <div class="fg"><label class="flabel">Spécialité</label><select class="fselect" id="fSpec"><option value="">— Aucune —</option>${specOpts}</select></div>
       <div class="fg"><label class="flabel">Priorité</label><select class="fselect" id="fPrio">${['Normale','Haute','Urgente','Faible'].map(s=>`<option ${d.priorite===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    </div>
+    <div class="frow">
       <div class="fg"><label class="flabel">Avancement (%)</label><input class="finput" id="fAvanc" type="number" min="0" max="100" value="${d.avancement||0}"></div>
     </div>
     <div class="fsep"></div><div class="fsec">Client</div>
@@ -384,7 +404,10 @@ function dossierFormHTML(d={}) {
     <div class="fg"><label class="flabel">Description / Notes</label><textarea class="ftextarea" id="fDesc">${d.description||''}</textarea></div>`;
 }
 
-function openDossierForm(d={}) {
+async function openDossierForm(d={}) {
+  if (!_specialites.length || d.specialite_id) {
+    _specialites = await api('/specialites?company_id='+currentCo);
+  }
   openDrawer(d.id ? 'Modifier le dossier' : 'Nouveau dossier', dossierFormHTML(d), `
     <button class="btn-prim" onclick="saveDossier(${d.id||''})">Enregistrer</button>
     ${d.id?`<button class="btn-danger" onclick="delDossier(${d.id})">Supprimer</button>`:''}
@@ -395,8 +418,12 @@ async function saveDossier(id) {
   const data = { company_id: currentCo, nom: fv('fNom'), numero: fv('fNum'), statut: fv('fStatut'), priorite: fv('fPrio'), avancement: fv('fAvanc'), client: fv('fClient'), contact: fv('fContact'), tel: fv('fTel'), cell: fv('fCell'), email: fv('fEmail'), adresse_travaux: fv('fAddr'), type_travaux: fv('fType'), categorie: fv('fCat'), representant: fv('fRep'), gestionnaire: fv('fGest'), date_debut: fv('fDebut'), date_fin: fv('fFin'), budget: fv('fBudget'), description: fv('fDesc') };
   if (!data.nom || !data.client) { toast('Nom et client requis', 'err'); return; }
   try {
+    let dosId = id;
     if (id) await api('/dossiers/'+id, { method:'PUT', body: JSON.stringify(data) });
-    else await api('/dossiers', { method:'POST', body: JSON.stringify(data) });
+    else { const r = await api('/dossiers', { method:'POST', body: JSON.stringify(data) }); dosId = r.id; }
+    // Save specialite_id separately
+    const specId = fv('fSpec') ? parseInt(fv('fSpec')) : null;
+    await api('/dossiers/'+dosId+'/specialite', { method:'PUT', body: JSON.stringify({ specialite_id: specId }) });
     closeDrawer({ target: document.getElementById('drawerOverlay') });
     toast('Dossier enregistré ✓'); renderDossiers();
   } catch(e) { toast(e.message, 'err'); }
@@ -513,8 +540,12 @@ async function toggleCheck(id, val) { await api('/dossiers/checklist/'+id, {meth
 let soumFilt = 'Tous';
 async function renderSoumissions() {
   const content = document.getElementById('mainContent');
-  const all = await api('/soumissions?company_id='+currentCo);
-  const stats = await api('/soumissions/stats?company_id='+currentCo);
+  const [all, stats, specs] = await Promise.all([
+    api('/soumissions?company_id='+currentCo),
+    api('/soumissions/stats?company_id='+currentCo),
+    api('/specialites?company_id='+currentCo)
+  ]);
+  _specialites = specs;
   const statMap = {}; stats.forEach(s => { statMap[s.statut] = s; });
 
   // Badge update
@@ -532,7 +563,7 @@ async function renderSoumissions() {
           ${s.total?`<div class="stat-sub">${fmt(s.total)}</div>`:''}
         </div>`; }).join('')}
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:12px;flex-wrap:wrap">
       <div class="filter-bar" style="margin:0">
         ${['Tous','En attente','Acceptée','Refusée','Révision'].map(s=>`<button class="filter-btn ${s===soumFilt?'active':''}" onclick="soumFilt='${s}';setSoumView(soumView)">${s}</button>`).join('')}
       </div>
@@ -541,6 +572,10 @@ async function renderSoumissions() {
         <button class="filter-btn ${soumView==='kanban'?'active':''}" onclick="setSoumView('kanban')">⊞ Kanban</button>
       </div>
     </div>
+    ${specs.length ? `<div class="filter-bar" style="margin-bottom:14px">
+      <button class="filter-btn ${soumFiltSpec===null?'active':''}" onclick="soumFiltSpec=null;setSoumView(soumView)">Toutes spécialités</button>
+      ${specs.map(sp=>{const c=sp.couleur||'#3b82f6';const act=soumFiltSpec===sp.id;return `<button class="filter-btn" style="${act?`background:${c};color:#fff;border-color:${c}`:`background:${c}18;color:${c};border-color:${c}55`}" onclick="soumFiltSpec=${sp.id};setSoumView(soumView)">${sp.nom}</button>`;}).join('')}
+    </div>` : '<div style="margin-bottom:14px"></div>'}
     <div id="soumContent"></div>`;
   renderSoumContent(all);
 }
@@ -549,7 +584,8 @@ function setSoumView(v) { soumView = v; document.querySelectorAll('.filter-btn')
 
 function renderSoumContent(all) {
   const c = document.getElementById('soumContent'); if (!c) return;
-  const filtered = soumFilt==='Tous' ? all : all.filter(s=>s.statut===soumFilt);
+  let filtered = soumFilt==='Tous' ? all : all.filter(s=>s.statut===soumFilt);
+  if (soumFiltSpec !== null) filtered = filtered.filter(s => s.specialite_id === soumFiltSpec);
   if (soumView === 'kanban') {
     const cols = [{val:'En attente',cls:'kc-att'},{val:'Acceptée',cls:'kc-acc'},{val:'Refusée',cls:'kc-ref'},{val:'Révision',cls:'kc-rev'}];
     c.innerHTML = `<div class="kanban-board">${cols.map(col => {
@@ -568,7 +604,7 @@ function renderSoumContent(all) {
       </div>`;
     }).join('')}</div>`;
   } else {
-    c.innerHTML = `<div class="cards-list">${filtered.length ? filtered.map(s=>`
+    c.innerHTML = `<div class="cards-list">${filtered.length ? filtered.map(s=>{ const sp=_specialites.find(x=>x.id===s.specialite_id); return `
       <div class="card ${cardColor(s.statut)}" onclick="openSoumDetail(${s.id})">
         <div class="card-header">
           <div style="flex:1">
@@ -589,10 +625,11 @@ function renderSoumContent(all) {
           </div>
         </div>
         <div class="card-meta">
+          ${sp?`<span style="background:${sp.couleur||'#3b82f6'}18;color:${sp.couleur||'#3b82f6'};border:1px solid ${sp.couleur||'#3b82f6'}55;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">⬤ ${sp.nom}</span>`:''}
           ${s.date_expiration?`<span class="badge b-orange">Exp: ${fd(s.date_expiration)}</span>`:''}
           ${s.representant?`<span class="badge b-gray">👤 ${s.representant}</span>`:''}
         </div>
-      </div>`).join('') : `<div class="empty-state"><div class="es-icon">📋</div><h3>Aucune soumission</h3><p>Cliquez sur "+ Nouvelle soumission".</p></div>`}</div>`;
+      </div>`;}).join('') : `<div class="empty-state"><div class="es-icon">📋</div><h3>Aucune soumission</h3><p>Cliquez sur "+ Nouvelle soumission".</p></div>`}</div>`;
   }
 }
 
@@ -623,7 +660,10 @@ function openSoumForm(dossId=null, existing={}) {
         <div class="fg"><label class="flabel">Date soumission</label><input class="finput" id="sDate" type="date" value="${existing.date_soumission||today()}"></div>
         <div class="fg"><label class="flabel">Date expiration</label><input class="finput" id="sExp" type="date" value="${existing.date_expiration||''}"></div>
       </div>
-      <div class="fg"><label class="flabel">Représentant</label><input class="finput" id="sRep" value="${existing.representant||''}"></div>
+      <div class="frow">
+        <div class="fg"><label class="flabel">Représentant</label><input class="finput" id="sRep" value="${existing.representant||''}"></div>
+        <div class="fg"><label class="flabel">Spécialité</label><select class="fselect" id="sSpec"><option value="">— Aucune —</option>${_specialites.map(sp=>`<option value="${sp.id}" ${existing.specialite_id==sp.id?'selected':''}>${sp.nom}</option>`).join('')}</select></div>
+      </div>
 
       <div class="fsep"></div>
       <div class="fsec" style="display:flex;justify-content:space-between;align-items:center">
@@ -689,8 +729,9 @@ function openSoumForm(dossId=null, existing={}) {
   };
   Promise.all([
     api('/dossiers?company_id='+currentCo),
-    existing.id ? api('/soumissions/'+existing.id+'/lignes') : Promise.resolve([])
-  ]).then(([doss, lignes]) => loadAndOpen(doss, lignes));
+    existing.id ? api('/soumissions/'+existing.id+'/lignes') : Promise.resolve([]),
+    api('/specialites?company_id='+currentCo)
+  ]).then(([doss, lignes, specs]) => { _specialites = specs; loadAndOpen(doss, lignes); });
 }
 
 function pickSoumStatut(btn, val) { document.querySelectorAll('#soumPills .sp').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); document.getElementById('sStatut').value = val; }
@@ -756,6 +797,9 @@ async function saveSoum(id) {
         await api('/soumissions/'+soumId+'/lignes/'+l.id, {method:'DELETE'});
       }
     }
+    // Save specialite_id separately
+    const specId = fv('sSpec') ? parseInt(fv('sSpec')) : null;
+    await api('/soumissions/'+soumId+'/specialite', { method:'PUT', body: JSON.stringify({ specialite_id: specId }) });
     closeDrawer({target:document.getElementById('drawerOverlay')});
     toast('Soumission enregistrée ✓');
     renderSoumissions();
@@ -1502,6 +1546,70 @@ async function loadFromRecette(recetteId) {
     calcSoumTotals();
     toast('Recette chargée — ' + lignes.length + ' ligne(s) ajoutée(s) ✓');
   } catch(e) { toast(e.message, 'err'); }
+}
+
+// ===== SPÉCIALITÉS =====
+async function renderSpecialites() {
+  const content = document.getElementById('mainContent');
+  const specs = await api('/specialites?company_id='+currentCo);
+  _specialites = specs;
+  content.innerHTML = `
+    <div class="cards-list" style="max-width:600px">
+      ${specs.length ? specs.map(sp => `
+        <div class="card" style="border-left:4px solid ${sp.couleur||'#3b82f6'}">
+          <div class="card-header">
+            <div style="display:flex;align-items:center;gap:12px;flex:1">
+              <div style="width:28px;height:28px;border-radius:50%;background:${sp.couleur||'#3b82f6'};flex-shrink:0"></div>
+              <div>
+                <div class="card-title">${sp.nom}</div>
+                <div class="card-sub" style="font-size:12px">${sp.couleur||'#3b82f6'}</div>
+              </div>
+            </div>
+            <button class="filter-btn" onclick="openSpecialiteForm(${JSON.stringify(sp).replace(/"/g,'&quot;')})">✏️ Modifier</button>
+          </div>
+        </div>`).join('') : `<div class="empty-state"><div class="es-icon">🏷️</div><h3>Aucune spécialité</h3><p>Cliquez sur "+ Nouvelle spécialité" pour créer vos premières spécialités (ex: Pompage, Coupage, Résidentiel).</p></div>`}
+    </div>`;
+}
+
+function openSpecialiteForm(sp={}) {
+  const html = `
+    <div class="fg"><label class="flabel">Nom *</label><input class="finput" id="spNom" value="${sp.nom||''}" placeholder="Ex: Pompage béton, Coupage béton..."></div>
+    <div class="fg"><label class="flabel">Couleur</label>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="color" id="spCouleur" value="${sp.couleur||'#3b82f6'}" style="width:48px;height:36px;border:none;border-radius:8px;cursor:pointer;background:none">
+        <span style="font-size:13px;color:var(--text2)">Utilisée pour les filtres et badges</span>
+      </div>
+    </div>
+    <div class="fg"><label class="flabel">Ordre d'affichage</label><input class="finput" id="spOrdre" type="number" value="${sp.ordre||0}" min="0"></div>`;
+  openDrawer(sp.id ? 'Modifier la spécialité' : 'Nouvelle spécialité', html, `
+    <button class="btn-prim" onclick="saveSpecialite(${sp.id||''})">Enregistrer</button>
+    ${sp.id ? `<button class="btn-danger" onclick="deleteSpecialite(${sp.id})">Supprimer</button>` : ''}
+    <button class="btn-sec" onclick="closeDrawer({target:document.getElementById('drawerOverlay')})">Annuler</button>`);
+}
+
+async function saveSpecialite(id) {
+  const nom = fv('spNom');
+  if (!nom) { toast('Nom requis', 'err'); return; }
+  const couleurEl = document.getElementById('spCouleur');
+  const data = {
+    company_id: currentCo,
+    nom,
+    couleur: couleurEl ? couleurEl.value : '#3b82f6',
+    ordre: parseInt(fv('spOrdre')) || 0
+  };
+  try {
+    if (id) await api('/specialites/'+id, { method:'PUT', body: JSON.stringify(data) });
+    else await api('/specialites', { method:'POST', body: JSON.stringify(data) });
+    closeDrawer({ target: document.getElementById('drawerOverlay') });
+    toast('Spécialité enregistrée ✓'); renderSpecialites();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function deleteSpecialite(id) {
+  if (!confirm('Supprimer cette spécialité ? Les dossiers et soumissions liés ne seront pas supprimés.')) return;
+  await api('/specialites/'+id, { method:'DELETE' });
+  closeDrawer({ target: document.getElementById('drawerOverlay') });
+  toast('Supprimée'); renderSpecialites();
 }
 
 // ===== START =====
