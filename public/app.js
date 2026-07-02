@@ -1275,7 +1275,7 @@ function openCatalogueItemForm(type='produit', existing={}) {
   openDrawer(
     existing.id ? `Modifier — ${existing.nom}` : `Nouveau ${typeLabel}`,
     html,
-    `<button class="btn-prim" onclick="saveCatalogueItem(${existing.id||''}, '${type}')">Enregistrer</button>
+    `<button class="btn-prim" onclick="saveCatalogueItem(${existing.id||'null'}, '${type}')">Enregistrer</button>
      ${existing.id ? `<button class="btn-danger" onclick="deleteCatalogueItem(${existing.id})">Supprimer</button>` : ''}
      <button class="btn-sec" onclick="closeDrawer({target:document.getElementById('drawerOverlay')})">Annuler</button>`
   );
