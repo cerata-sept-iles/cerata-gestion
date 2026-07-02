@@ -78,6 +78,7 @@ function renderLayout() {
             <div class="nav-section-title">Ressources</div>
             ${navItem('contacts','Contacts','M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z')}
             ${navItem('temps','Feuilles de temps','M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z')}
+            ${navItem('catalogue','Catalogue','M14 6l-1-2H5v17h2v-7h5l1 2h7V6h-6zm4 8h-4l-1-2H7V6h5l1 2h5v6z')}
             ${user?.role==='admin' ? navItem('users','Utilisateurs','M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z') : ''}
           </div>
         </nav>
@@ -138,6 +139,7 @@ const SCREEN_CONFIG = {
   contacts: { title: 'Contacts', showNew: true, newLabel: '+ Nouveau contact' },
   temps: { title: 'Feuilles de temps', showNew: true, newLabel: '+ Ajouter des heures' },
   users: { title: 'Utilisateurs', showNew: true, newLabel: '+ Nouvel utilisateur' },
+  catalogue: { title: 'Catalogue', showNew: true, newLabel: '+ Ajouter au catalogue' },
 };
 
 function navigate(screen) {
@@ -149,12 +151,12 @@ function navigate(screen) {
   document.getElementById('topbarTitle').textContent = cfg.title || screen;
   const btn = document.getElementById('btnNew');
   if (btn) { btn.style.display = cfg.showNew ? 'flex' : 'none'; document.getElementById('btnNewLabel').textContent = cfg.newLabel || 'Nouveau'; }
-  const renders = { dashboard: renderDashboard, dossiers: renderDossiers, soumissions: renderSoumissions, bons: renderBons, rapports: renderRapports, factures: renderFactures, contacts: renderContacts, temps: renderTemps, users: renderUsers };
+  const renders = { dashboard: renderDashboard, dossiers: renderDossiers, soumissions: renderSoumissions, bons: renderBons, rapports: renderRapports, factures: renderFactures, contacts: renderContacts, temps: renderTemps, users: renderUsers, catalogue: renderCatalogue };
   if (renders[screen]) renders[screen]();
 }
 
 function openNew() {
-  const forms = { dossiers: openDossierForm, soumissions: openSoumForm, bons: openBonForm, rapports: openRapForm, factures: openFacForm, contacts: openContForm, temps: openTempsForm, users: openUserForm };
+  const forms = { dossiers: openDossierForm, soumissions: openSoumForm, bons: openBonForm, rapports: openRapForm, factures: openFacForm, contacts: openContForm, temps: openTempsForm, users: openUserForm, catalogue: openCatalogueItemForm };
   if (forms[currentScreen]) forms[currentScreen]();
 }
 
@@ -626,7 +628,10 @@ function openSoumForm(dossId=null, existing={}) {
       <div class="fsep"></div>
       <div class="fsec" style="display:flex;justify-content:space-between;align-items:center">
         <span>Lignes de soumission</span>
-        <button class="btn-sec" style="padding:4px 12px;font-size:12px" onclick="addSoumLigne()">+ Ajouter</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn-sec" style="padding:4px 10px;font-size:12px" onclick="addSoumLigne()">+ Ligne</button>
+          <button class="btn-sec" style="padding:4px 10px;font-size:12px;background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe" onclick="showCataloguePicker()">📦 Catalogue</button>
+        </div>
       </div>
       <div id="soumLignesContainer"></div>
 
@@ -1187,6 +1192,317 @@ async function saveUser(id) {
 
 // ===== AUTH =====
 async function logout() { await api('/auth/logout',{method:'POST'}); window.location='/'; }
+
+// ===== CATALOGUE =====
+let _catTab = 'produit';
+let _recetteLignes = [];
+
+async function renderCatalogue() {
+  const c = document.getElementById('mainContent');
+  c.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text2)">Chargement…</div>';
+  const all = await api('/catalogue?company_id=' + currentCo);
+  const produits = all.filter(x => x.type === 'produit');
+  const services = all.filter(x => x.type === 'service');
+  const recettes = all.filter(x => x.type === 'recette');
+
+  const tabStyle = (t) => `style="padding:8px 20px;border:none;border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;${_catTab===t?'background:var(--blue);color:#fff':'background:var(--bg2);color:var(--text2)'}"`;
+
+  const renderCards = (items, type) => items.length === 0
+    ? `<div style="text-align:center;padding:32px;color:var(--text2);font-size:14px">Aucun ${type} — cliquez « + Ajouter au catalogue »</div>`
+    : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;padding:4px 0">
+        ${items.map(item => `
+          <div class="card" style="padding:16px;cursor:pointer;transition:box-shadow .15s" onclick="openCatalogueItemForm('${item.type}',${JSON.stringify(item).replace(/"/g,'&quot;')})">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+              <span style="font-size:11px;padding:2px 10px;border-radius:12px;font-weight:700;background:${item.type==='produit'?'#dcfce7':'#e0f2fe'};color:${item.type==='produit'?'#166534':'#0369a1'}">${item.type==='produit'?'Produit':'Service'}</span>
+              <span style="font-size:15px;font-weight:900;color:var(--blue)">${item.prix_unitaire > 0 ? fmt(item.prix_unitaire) : '—'}</span>
+            </div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:4px">${item.nom}</div>
+            ${item.description ? `<div style="font-size:12px;color:var(--text2);margin-bottom:6px">${item.description}</div>` : ''}
+            <div style="font-size:12px;color:var(--text2)">Unité: ${item.unite}</div>
+          </div>`).join('')}
+      </div>`;
+
+  const renderRecettes = (items) => items.length === 0
+    ? `<div style="text-align:center;padding:32px;color:var(--text2);font-size:14px">Aucune recette — cliquez « + Ajouter au catalogue »</div>`
+    : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;padding:4px 0">
+        ${items.map(item => `
+          <div class="card" style="padding:16px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+              <span style="font-size:11px;padding:2px 10px;border-radius:12px;font-weight:700;background:#fdf4ff;color:#7e22ce">Recette</span>
+              <div style="display:flex;gap:6px">
+                <button class="btn-sec" style="padding:3px 10px;font-size:11px" onclick="event.stopPropagation();openCatalogueItemForm('recette',${JSON.stringify(item).replace(/"/g,'&quot;')})">✏️ Modifier</button>
+                <button class="btn-sec" style="padding:3px 10px;font-size:11px;background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe" onclick="event.stopPropagation();openRecetteComposantes(${item.id},'${item.nom.replace(/'/g,"\\'")}')">🔧 Composantes</button>
+              </div>
+            </div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:4px">${item.nom}</div>
+            ${item.description ? `<div style="font-size:12px;color:var(--text2)">${item.description}</div>` : ''}
+          </div>`).join('')}
+      </div>`;
+
+  c.innerHTML = `
+    <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+      <button ${tabStyle('produit')} onclick="setCatTab('produit')">📦 Produits (${produits.length})</button>
+      <button ${tabStyle('service')} onclick="setCatTab('service')">🔧 Services (${services.length})</button>
+      <button ${tabStyle('recette')} onclick="setCatTab('recette')">📋 Recettes (${recettes.length})</button>
+    </div>
+    <div id="catContent">
+      ${_catTab === 'produit' ? renderCards(produits, 'produit') : _catTab === 'service' ? renderCards(services, 'service') : renderRecettes(recettes)}
+    </div>`;
+}
+
+function setCatTab(t) { _catTab = t; renderCatalogue(); }
+
+function openCatalogueItemForm(type='produit', existing={}) {
+  _catTab = type;
+  const typeLabel = type === 'produit' ? 'Produit' : type === 'service' ? 'Service' : 'Recette';
+  const typeEmoji = type === 'produit' ? '📦' : type === 'service' ? '🔧' : '📋';
+  const html = `
+    <div style="margin-bottom:14px;padding:10px 14px;border-radius:10px;background:${type==='produit'?'#dcfce7':type==='service'?'#e0f2fe':'#fdf4ff'};color:${type==='produit'?'#166534':type==='service'?'#0369a1':'#7e22ce'};font-weight:700;font-size:13px">
+      ${typeEmoji} ${typeLabel}
+    </div>
+    <div class="fg"><label class="flabel">Nom *</label><input class="finput" id="cNom" value="${existing.nom||''}" placeholder="${type==='recette'?'Ex: Installation type A':'Ex: Main d\'œuvre standard'}"></div>
+    <div class="fg"><label class="flabel">Description</label><textarea class="ftextarea" id="cDesc" rows="2">${existing.description||''}</textarea></div>
+    ${type !== 'recette' ? `
+    <div class="frow">
+      <div class="fg"><label class="flabel">Unité</label><input class="finput" id="cUnite" value="${existing.unite||'unité'}" placeholder="h, unité, forfait…"></div>
+      <div class="fg"><label class="flabel">Prix unitaire</label><input class="finput" id="cPrix" type="number" step="0.01" value="${existing.prix_unitaire||''}" placeholder="0.00"></div>
+    </div>` : `
+    <input type="hidden" id="cUnite" value="recette">
+    <input type="hidden" id="cPrix" value="0">
+    <div style="padding:12px;background:var(--bg2);border-radius:8px;font-size:13px;color:var(--text2)">
+      💡 Après la création, utilisez « 🔧 Composantes » pour ajouter les produits et services de cette recette.
+    </div>`}`;
+  openDrawer(
+    existing.id ? `Modifier — ${existing.nom}` : `Nouveau ${typeLabel}`,
+    html,
+    `<button class="btn-prim" onclick="saveCatalogueItem(${existing.id||''}, '${type}')">Enregistrer</button>
+     ${existing.id ? `<button class="btn-danger" onclick="deleteCatalogueItem(${existing.id})">Supprimer</button>` : ''}
+     <button class="btn-sec" onclick="closeDrawer({target:document.getElementById('drawerOverlay')})">Annuler</button>`
+  );
+}
+
+async function saveCatalogueItem(id, type) {
+  const nom = fv('cNom');
+  if (!nom) { toast('Le nom est requis', 'err'); return; }
+  const data = { company_id: currentCo, type: type || _catTab, nom, description: fv('cDesc'), unite: fv('cUnite') || 'unité', prix_unitaire: parseFloat(fv('cPrix')) || 0 };
+  try {
+    if (id) {
+      await api('/catalogue/' + id, { method: 'PUT', body: JSON.stringify(data) });
+    } else {
+      await api('/catalogue', { method: 'POST', body: JSON.stringify(data) });
+    }
+    closeDrawer({ target: document.getElementById('drawerOverlay') });
+    toast((id ? 'Modifié' : 'Créé') + ' ✓');
+    renderCatalogue();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function deleteCatalogueItem(id) {
+  if (!confirm('Supprimer cet élément du catalogue ?')) return;
+  await api('/catalogue/' + id, { method: 'DELETE' });
+  closeDrawer({ target: document.getElementById('drawerOverlay') });
+  toast('Supprimé');
+  renderCatalogue();
+}
+
+// ===== RECETTE COMPOSANTES =====
+async function openRecetteComposantes(recetteId, recetteNom) {
+  _recetteLignes = [];
+  const [items, lignes] = await Promise.all([
+    api('/catalogue?company_id=' + currentCo),
+    api('/catalogue/' + recetteId + '/lignes')
+  ]);
+  _recetteLignes = lignes;
+  const prodServItems = items.filter(x => x.type !== 'recette');
+
+  const renderLignes = () => {
+    const container = document.getElementById('recetteLignesContainer');
+    if (!container) return;
+    if (_recetteLignes.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text2);font-size:13px">Aucune composante — ajoutez des produits/services ci-dessous</div>';
+      return;
+    }
+    container.innerHTML = _recetteLignes.map((l, i) => `
+      <div style="display:grid;grid-template-columns:1fr 80px 90px 90px 32px;gap:6px;align-items:center;margin-bottom:6px">
+        <input class="finput" style="font-size:12px" value="${l.description}" onchange="_recetteLignes[${i}].description=this.value" placeholder="Description">
+        <input class="finput" style="font-size:12px" type="number" value="${l.quantite}" min="0.01" step="0.01" onchange="_recetteLignes[${i}].quantite=parseFloat(this.value)||1">
+        <input class="finput" style="font-size:12px" value="${l.unite}" onchange="_recetteLignes[${i}].unite=this.value" placeholder="unité">
+        <input class="finput" style="font-size:12px" type="number" value="${l.prix_unitaire}" step="0.01" onchange="_recetteLignes[${i}].prix_unitaire=parseFloat(this.value)||0" placeholder="Prix">
+        <button onclick="removeRecetteLigne(${recetteId},${l.id},${i})" style="background:#fee2e2;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;color:#dc2626">✕</button>
+      </div>`).join('');
+  };
+
+  const html = `
+    <div style="margin-bottom:14px;font-size:13px;color:var(--text2)">Composantes de la recette <strong>${recetteNom}</strong></div>
+    <div id="recetteLignesContainer"></div>
+    <div class="fsep"></div>
+    <div class="fsec">Ajouter depuis le catalogue</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;max-height:200px;overflow-y:auto">
+      ${prodServItems.map(item => `
+        <button class="btn-sec" style="text-align:left;padding:8px 10px;font-size:12px" onclick="addRecetteLigneFromItem(${recetteId}, ${JSON.stringify(item).replace(/"/g,'&quot;')})">
+          <strong>${item.nom}</strong><br>
+          <span style="color:var(--text2)">${item.unite} · ${item.prix_unitaire > 0 ? fmt(item.prix_unitaire) : 'Prix libre'}</span>
+        </button>`).join('')}
+    </div>
+    <div class="fsep"></div>
+    <div class="fsec">Ou ligne personnalisée</div>
+    <div style="display:grid;grid-template-columns:1fr 80px 90px 90px auto;gap:6px;align-items:center">
+      <input class="finput" style="font-size:12px" id="rlDesc" placeholder="Description">
+      <input class="finput" style="font-size:12px" id="rlQte" type="number" value="1" min="0.01" step="0.01">
+      <input class="finput" style="font-size:12px" id="rlUnite" value="unité" placeholder="Unité">
+      <input class="finput" style="font-size:12px" id="rlPrix" type="number" step="0.01" placeholder="Prix">
+      <button class="btn-sec" style="padding:6px 12px;white-space:nowrap" onclick="addRecetteLigneManuelle(${recetteId})">+ Ajouter</button>
+    </div>`;
+
+  openDrawer(`Composantes — ${recetteNom}`, html,
+    `<button class="btn-prim" onclick="saveRecetteLignes(${recetteId})">Enregistrer les modifications</button>
+     <button class="btn-sec" onclick="closeDrawer({target:document.getElementById('drawerOverlay')})">Fermer</button>`
+  );
+  setTimeout(renderLignes, 60);
+  window._renderRecetteLignes = renderLignes;
+}
+
+async function addRecetteLigneFromItem(recetteId, item) {
+  try {
+    const r = await api('/catalogue/' + recetteId + '/lignes', {
+      method: 'POST',
+      body: JSON.stringify({ catalogue_id: item.id, description: item.nom, quantite: 1, unite: item.unite, prix_unitaire: item.prix_unitaire })
+    });
+    _recetteLignes.push({ id: r.id, catalogue_id: item.id, description: item.nom, quantite: 1, unite: item.unite, prix_unitaire: item.prix_unitaire, ordre: _recetteLignes.length + 1 });
+    if (window._renderRecetteLignes) window._renderRecetteLignes();
+    toast(item.nom + ' ajouté ✓');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function addRecetteLigneManuelle(recetteId) {
+  const desc = fv('rlDesc');
+  if (!desc) { toast('Description requise', 'err'); return; }
+  const data = { description: desc, quantite: parseFloat(fv('rlQte')) || 1, unite: fv('rlUnite') || 'unité', prix_unitaire: parseFloat(fv('rlPrix')) || 0 };
+  try {
+    const r = await api('/catalogue/' + recetteId + '/lignes', { method: 'POST', body: JSON.stringify(data) });
+    _recetteLignes.push({ id: r.id, ...data });
+    if (window._renderRecetteLignes) window._renderRecetteLignes();
+    fs('rlDesc', ''); fs('rlQte', '1'); fs('rlUnite', 'unité'); fs('rlPrix', '');
+    toast('Ligne ajoutée ✓');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function removeRecetteLigne(recetteId, lid, idx) {
+  await api('/catalogue/' + recetteId + '/lignes/' + lid, { method: 'DELETE' });
+  _recetteLignes.splice(idx, 1);
+  if (window._renderRecetteLignes) window._renderRecetteLignes();
+}
+
+async function saveRecetteLignes(recetteId) {
+  try {
+    for (const l of _recetteLignes) {
+      await api('/catalogue/' + recetteId + '/lignes/' + l.id, {
+        method: 'PUT',
+        body: JSON.stringify({ description: l.description, quantite: l.quantite, unite: l.unite, prix_unitaire: l.prix_unitaire })
+      });
+    }
+    closeDrawer({ target: document.getElementById('drawerOverlay') });
+    toast('Recette sauvegardée ✓');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+// ===== CATALOGUE PICKER (dans formulaire soumission) =====
+async function showCataloguePicker() {
+  let _pickerTab = 'produit';
+  let allCat = [];
+  try { allCat = await api('/catalogue?company_id=' + currentCo); } catch(e) {}
+
+  const overlay = document.createElement('div');
+  overlay.id = 'catPickerOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+
+  const renderPickerContent = (tab) => {
+    _pickerTab = tab;
+    const items = allCat.filter(x => x.type === tab);
+    const tabBtn = (t, label) => `<button onclick="document.getElementById('catPickerTabBar').querySelectorAll('button').forEach(b=>b.style.cssText='background:var(--bg2);color:var(--text2);');this.style.cssText='background:var(--blue);color:#fff;';document.getElementById('catPickerItems').innerHTML=window._renderPickerItems('${t}')" style="padding:6px 16px;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;${_pickerTab===t?'background:var(--blue);color:#fff':'background:var(--bg2);color:var(--text2)'}"> ${label}</button>`;
+
+    if (tab === 'recette') {
+      return items.length === 0
+        ? '<div style="text-align:center;padding:24px;color:var(--text2);font-size:13px">Aucune recette dans le catalogue</div>'
+        : items.map(item => `
+          <div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <strong style="font-size:14px">${item.nom}</strong>
+              <button class="btn-prim" style="padding:5px 14px;font-size:12px" onclick="loadFromRecette(${item.id});closeCatPicker()">Charger tout</button>
+            </div>
+            ${item.description ? `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">${item.description}</div>` : ''}
+          </div>`).join('');
+    }
+    return items.length === 0
+      ? `<div style="text-align:center;padding:24px;color:var(--text2);font-size:13px">Aucun ${tab} dans le catalogue</div>`
+      : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
+          ${items.map(item => `
+            <div style="border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'" onclick="addFromCatalogue(${JSON.stringify(item).replace(/"/g,'&quot;')});closeCatPicker()">
+              <div style="font-weight:700;font-size:13px;margin-bottom:4px">${item.nom}</div>
+              ${item.description ? `<div style="font-size:11px;color:var(--text2);margin-bottom:6px">${item.description}</div>` : ''}
+              <div style="display:flex;justify-content:space-between;font-size:12px">
+                <span style="color:var(--text2)">${item.unite}</span>
+                <span style="font-weight:700;color:var(--blue)">${item.prix_unitaire > 0 ? fmt(item.prix_unitaire) : 'Prix libre'}</span>
+              </div>
+            </div>`).join('')}
+        </div>`;
+  };
+
+  window._renderPickerItems = renderPickerContent;
+
+  overlay.innerHTML = `
+    <div style="background:var(--bg1);border-radius:16px;width:min(680px,95vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <strong style="font-size:16px">📦 Ajouter depuis le catalogue</strong>
+        <button onclick="closeCatPicker()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text2)">✕</button>
+      </div>
+      <div id="catPickerTabBar" style="display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)">
+        <button onclick="document.getElementById('catPickerTabBar').querySelectorAll('button').forEach(b=>{b.style.background='var(--bg2)';b.style.color='var(--text2)'});this.style.background='var(--blue)';this.style.color='#fff';document.getElementById('catPickerItems').innerHTML=window._renderPickerItems('produit')" style="padding:6px 16px;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff">📦 Produits</button>
+        <button onclick="document.getElementById('catPickerTabBar').querySelectorAll('button').forEach(b=>{b.style.background='var(--bg2)';b.style.color='var(--text2)'});this.style.background='var(--blue)';this.style.color='#fff';document.getElementById('catPickerItems').innerHTML=window._renderPickerItems('service')" style="padding:6px 16px;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;background:var(--bg2);color:var(--text2)">🔧 Services</button>
+        <button onclick="document.getElementById('catPickerTabBar').querySelectorAll('button').forEach(b=>{b.style.background='var(--bg2)';b.style.color='var(--text2)'});this.style.background='var(--blue)';this.style.color='#fff';document.getElementById('catPickerItems').innerHTML=window._renderPickerItems('recette')" style="padding:6px 16px;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;background:var(--bg2);color:var(--text2)">📋 Recettes</button>
+      </div>
+      <div id="catPickerItems" style="overflow-y:auto;padding:16px;flex:1">${renderPickerContent('produit')}</div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeCatPicker(); });
+}
+
+function closeCatPicker() {
+  const el = document.getElementById('catPickerOverlay');
+  if (el) el.remove();
+}
+
+function addFromCatalogue(item) {
+  _soumLignes.push({
+    description: item.nom + (item.description ? ' — ' + item.description : ''),
+    quantite: 1,
+    unite: item.unite,
+    prix_unitaire: item.prix_unitaire,
+    total: item.prix_unitaire
+  });
+  renderSoumLignes();
+  calcSoumTotals();
+  toast(item.nom + ' ajouté ✓');
+}
+
+async function loadFromRecette(recetteId) {
+  try {
+    const lignes = await api('/catalogue/' + recetteId + '/lignes');
+    lignes.forEach(l => {
+      _soumLignes.push({
+        description: l.description,
+        quantite: l.quantite,
+        unite: l.unite,
+        prix_unitaire: l.prix_unitaire,
+        total: parseFloat((l.quantite * l.prix_unitaire).toFixed(2))
+      });
+    });
+    renderSoumLignes();
+    calcSoumTotals();
+    toast('Recette chargée — ' + lignes.length + ' ligne(s) ajoutée(s) ✓');
+  } catch(e) { toast(e.message, 'err'); }
+}
 
 // ===== START =====
 init();
