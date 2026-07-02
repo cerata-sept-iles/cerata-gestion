@@ -249,6 +249,15 @@ ordre INTEGER DEFAULT 0,
 FOREIGN KEY(recette_id) REFERENCES catalogue(id) ON DELETE CASCADE,
 FOREIGN KEY(catalogue_id) REFERENCES catalogue(id) ON DELETE SET NULL
 );
+
+CREATE TABLE IF NOT EXISTS specialites (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+company_id TEXT NOT NULL,
+nom TEXT NOT NULL,
+couleur TEXT DEFAULT '#3b82f6',
+ordre INTEGER DEFAULT 0,
+FOREIGN KEY(company_id) REFERENCES companies(id)
+);
 `);
 
 // Seed default companies
@@ -288,6 +297,8 @@ const migrations = [
 "ALTER TABLE soumissions ADD COLUMN forfaitaire INTEGER DEFAULT 0",
 "ALTER TABLE soumissions ADD COLUMN tps_incluse INTEGER DEFAULT 1",
 "ALTER TABLE soumissions ADD COLUMN tvq_incluse INTEGER DEFAULT 1",
+"ALTER TABLE dossiers ADD COLUMN specialite_id INTEGER REFERENCES specialites(id)",
+"ALTER TABLE soumissions ADD COLUMN specialite_id INTEGER REFERENCES specialites(id)",
 ];
 migrations.forEach(sql => { try { db.exec(sql); } catch(e) { /* column already exists */ } });
 

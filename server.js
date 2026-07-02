@@ -39,15 +39,27 @@ app.use('/api/factures', require('./routes/factures'));
 app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/catalogue', require('./routes/catalogue'));
+app.use('/api/specialites', require('./routes/specialites'));
 
 // Companies list
 const db = require('./database');
+const { requireAuth } = require('./middleware/auth');
+
 app.get('/api/companies', (req, res) => {
 res.json(db.prepare('SELECT * FROM companies').all());
 });
 
+// Specialite quick-update (avoids modifying existing dossiers/soumissions routes)
+app.put('/api/dossiers/:id/specialite', requireAuth, (req, res) => {
+db.prepare('UPDATE dossiers SET specialite_id = ? WHERE id = ?').run(req.body.specialite_id || null, req.params.id);
+res.json({ success: true });
+});
+app.put('/api/soumissions/:id/specialite', requireAuth, (req, res) => {
+db.prepare('UPDATE soumissions SET specialite_id = ? WHERE id = ?').run(req.body.specialite_id || null, req.params.id);
+res.json({ success: true });
+});
+
 // PO unifié: cherche dans bons → rapports → soumissions pour un dossier
-const { requireAuth } = require('./middleware/auth');
 app.get('/api/dossiers/:id/po', requireAuth, (req, res) => {
 const did = req.params.id;
 const bon = db.prepare("SELECT numero_po FROM bons_travail WHERE dossier_id=? AND numero_po IS NOT NULL AND numero_po != '' ORDER BY created_at DESC LIMIT 1").get(did);
